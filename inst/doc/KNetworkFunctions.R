@@ -30,7 +30,7 @@ sp::plot(mtl_theatres, col = "red", add=T, pch = 20)
 ## ----message=FALSE, warning=FALSE, eval=FALSE---------------------------------
 #  kfun_theatre <- kfunctions(main_network_mtl, mtl_theatres,
 #                             start = 0, end = 5000, step = 50,
-#                             width = 1000, nsim = 50,
+#                             width = 1000, nsim = 50, resolution = 50,
 #                             verbose = FALSE, conf_int = 0.05)
 #  kfun_theatre$plotk
 

@@ -12,7 +12,7 @@
 
 <meta name="author" content="Jeremy Gelb" />
 
-<meta name="date" content="2021-01-14" />
+<meta name="date" content="2021-01-18" />
 
 <title>Details about NKDE</title>
 
@@ -367,7 +367,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Details about NKDE</h1>
 <h4 class="author">Jeremy Gelb</h4>
-<h4 class="date">2021-01-14</h4>
+<h4 class="date">2021-01-18</h4>
 
 
 <div id="TOC">
@@ -421,14 +421,10 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <span id="cb1-34"><a href="#cb1-34"></a>                    <span class="dt">y=</span><span class="kw">c</span>(<span class="op">-</span><span class="fl">2.5</span>))</span>
 <span id="cb1-35"><a href="#cb1-35"></a><span class="kw">coordinates</span>(event) &lt;-<span class="st"> </span><span class="kw">cbind</span>(event<span class="op">$</span>x,event<span class="op">$</span>y)</span>
 <span id="cb1-36"><a href="#cb1-36"></a></span>
-<span id="cb1-37"><a href="#cb1-37"></a><span class="kw">proj4string</span>(event) &lt;-<span class="st"> </span><span class="kw">CRS</span>(<span class="st">&quot;EPSG:32633&quot;</span>)</span>
-<span id="cb1-38"><a href="#cb1-38"></a><span class="kw">proj4string</span>(all_lines) &lt;-<span class="st"> </span><span class="kw">CRS</span>(<span class="st">&quot;EPSG:32633&quot;</span>)</span>
-<span id="cb1-39"><a href="#cb1-39"></a></span>
-<span id="cb1-40"><a href="#cb1-40"></a></span>
-<span id="cb1-41"><a href="#cb1-41"></a><span class="co"># and map the situation</span></span>
-<span id="cb1-42"><a href="#cb1-42"></a><span class="kw">par</span>(<span class="dt">mar=</span><span class="kw">c</span>(<span class="fl">0.1</span>,<span class="fl">0.1</span>,<span class="fl">0.1</span>,<span class="fl">0.1</span>))</span>
-<span id="cb1-43"><a href="#cb1-43"></a>sp<span class="op">::</span><span class="kw">plot</span>(all_lines)</span>
-<span id="cb1-44"><a href="#cb1-44"></a>sp<span class="op">::</span><span class="kw">plot</span>(event,<span class="dt">add=</span>T,<span class="dt">col=</span><span class="st">&quot;red&quot;</span>,<span class="dt">pch =</span> <span class="dv">19</span>)</span></code></pre></div>
+<span id="cb1-37"><a href="#cb1-37"></a><span class="co"># and map the situation</span></span>
+<span id="cb1-38"><a href="#cb1-38"></a><span class="kw">par</span>(<span class="dt">mar=</span><span class="kw">c</span>(<span class="fl">0.1</span>,<span class="fl">0.1</span>,<span class="fl">0.1</span>,<span class="fl">0.1</span>))</span>
+<span id="cb1-39"><a href="#cb1-39"></a>sp<span class="op">::</span><span class="kw">plot</span>(all_lines)</span>
+<span id="cb1-40"><a href="#cb1-40"></a>sp<span class="op">::</span><span class="kw">plot</span>(event,<span class="dt">add=</span>T,<span class="dt">col=</span><span class="st">&quot;red&quot;</span>,<span class="dt">pch =</span> <span class="dv">19</span>)</span></code></pre></div>
 <p><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASAAAAEgCAMAAAAjXV6yAAAACVBMVEUAAAD/AAD///9nGWQeAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAD3klEQVR4nO3dsW3DUBAFQX33X7QAZ058EYdc4l4B3MEREEN9fnb/7nM34OnbAw3bAw3bAw3bAw3bAw3bAw3bAw3bAw3bAw3bAw0jB7ooUraTSNlOImU7iZTtJFK2k0jZTiJlO4mU7SRStpNI2U4iZTuJlO0kUraTSNlOImU7iZTtJFK2k0jZTiJlO4mU7SRStpNI2U4iZTuJlO0kUraTSNlOImU7iZTtJFK2k0jZTiJlO4mU7SRStpNI2U4iZTuJlO0kUraTSNlOImU7iZTtJFK2k0jZTiJlO4mU7SRStpNI2U4iZTuJlO0kUraTSNlOImU7iZTtJFK2k0jZTiJlO4mU7SRStpNI2U4iZTuJlO0kUraTSNlOImU7iZTtJFK2k0jZTiJlO4mU7SRStpNI2U4iZTuJlO0kUraTSNlOImU7iZTtJFK2k0jZTiJlO4mU7SRStpNI2U4iZTuJlO0kUraTSNlOImU7iXj7Z/e7e9/C4x/7nkjZTiJlO4mU7SRStpNI2U4iZTuJlO0kUraTSNlOImU7iZTtJFK2k0jZTiJlO4mU7SRStpNI2U4iZTuJlO0kUraTSNlOImU7iZTtJFK2k0jZTiJlO4mU7SRStpNI2U4iZTuJlO0kUraTSNlOImU7iZTtJFK2k0jZTiJl+5+dcy557lsOdM5FF3rJgc656kJ7oGF7oGEvOdD+Bo3br9hNkbKdRMp2EinbSaRsJ5GynUTKdhIp20mkbCeRsp1EynYSKdtJpGwnkbKdRMp2EinbSaRsJ5GynUTKdhIp20mkbCeRsp1EynYSKdtJpGwnkbKdRMp2EinbSaRsJ5GynUTKdhIp20mkbCeRsp1EynYSKdtJpGwnkbKdRMp2EinbScTb7/67hqfs3rfw+Me+J1K2k0jZTiJlO4mU7SRStpNI2U4iZTuJlO0kUraTSNlOImU7iZTtJFK2k0jZTiJlO4mU7SRStpNI2U4iZTuJlO0kUraTSNlOImU7iZTtJFK2k0jZTiJlO4mU7SRStpNI2U4iZTuJlO0kUraTSNlOImU7iZTtJFK2k0jZTiJlO4mU7SRStpNI2U4iZTuJlO0kUraTSNlOImU7iZTtJFK2k0jZTiJlO4mU7SRStpNI2U4iZTuJlO0kUraTSNlOImU7iZTtJFK2k0jZTiJlO4mU7SRStpNI2U4iZTuJlO0kUraTSNlOImU7iZTtJFK2k0jZTiJlO4mU7SRStpNI2U4iZTuJlO0kUraTSNlOImU7iZTtJFK2k0jZTiJl+3u2Bxq2Bxq2Bxq2Bxq2Bxq2Bxq2Bxq2Bxq2Bxq2Bxq2Bxr2Bdhef9CzsJcBAAAAAElFTkSuQmCC" /><!-- --></p>
 </div>
 <div id="the-simple-method" class="section level1">

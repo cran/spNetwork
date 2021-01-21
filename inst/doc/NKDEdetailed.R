@@ -43,10 +43,6 @@ event <- data.frame(x=c(5),
                     y=c(-2.5))
 coordinates(event) <- cbind(event$x,event$y)
 
-proj4string(event) <- CRS("EPSG:32633")
-proj4string(all_lines) <- CRS("EPSG:32633")
-
-
 # and map the situation
 par(mar=c(0.1,0.1,0.1,0.1))
 sp::plot(all_lines)

@@ -72,7 +72,7 @@ As one can see, the theatres seems to be more clustered than the libraries.
 ```{r message=FALSE, warning=FALSE, eval=FALSE}
 kfun_theatre <- kfunctions(main_network_mtl, mtl_theatres,
                            start = 0, end = 5000, step = 50, 
-                           width = 1000, nsim = 50,
+                           width = 1000, nsim = 50, resolution = 50,
                            verbose = FALSE, conf_int = 0.05)
 kfun_theatre$plotk
 ```
@@ -92,7 +92,7 @@ The G-function is also indicating a clustering situation, which is maximum betwe
 
 ```{r fig.align="center", fig.show='hold', message=FALSE, warning=FALSE, eval = FALSE}
 kfun_biblio <- kfunctions(main_network_mtl, mtl_libraries,
-                          start = 0, end = 5000, step = 50, 
+                          start = 0, end = 5000, step = 50,
                           width = 1000, nsim = 50, verbose = FALSE)
 
 kfun_biblio$plotk
@@ -120,7 +120,7 @@ Note that the cross-K-function A to B is not necessarily the same results as the
 
 ```{r fig.align="center", fig.show='hold', message=FALSE, warning=FALSE, eval = FALSE}
 cross_biblio_theatre <- cross_kfunctions(main_network_mtl, mtl_libraries,
-                        mtl_theatres, start = 0, end = 5000, step = 50, 
+                        mtl_theatres, start = 0, end = 5000, step = 50,
                         width = 1000, nsim = 50, verbose = FALSE)
 
 cross_biblio_theatre$plotk
@@ -134,7 +134,7 @@ One can conclude from the chart that the libraries are randomly located around t
 
 ```{r fig.align="center", fig.show='hold', message=FALSE, warning=FALSE, eval = FALSE}
 cross_theatre_biblio <- cross_kfunctions(main_network_mtl, mtl_theatres,
-                      mtl_libraries, start = 0, end = 5000, 
+                      mtl_libraries, start = 0, end = 5000,
                       step = 50, width = 1000, nsim = 50, verbose = FALSE)
 
 cross_theatre_biblio$plotk
