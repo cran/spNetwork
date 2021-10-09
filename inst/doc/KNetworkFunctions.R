@@ -5,6 +5,7 @@ knitr::opts_chunk$set(
 )
 backup_option <- options()
 base_wd <- getwd()
+library(ggplot2)
 
 ## ----include=FALSE------------------------------------------------------------
 load(system.file("extdata", "results_vignette_kfunc.rda",
@@ -35,10 +36,33 @@ sp::plot(mtl_theatres, col = "red", add=T, pch = 20)
 #  kfun_theatre$plotk
 
 ## ----echo=FALSE, fig.align="center", fig.show='hold', message=FALSE, warning=FALSE----
-kfun_theatre$plotk
+plot_df <- kfun_theatre$values
 
-## ---- fig.show='hold', fig.align = 'center'-----------------------------------
-kfun_theatre$plotg
+ggplot(plot_df)+
+    geom_ribbon(aes_string(x = "distances", ymin="lower_k",ymax = "upper_k"),
+                fill = grDevices::rgb(0.1,0.1,0.1), alpha=0.4)+
+    geom_path(aes_string(x = "distances", y = "lower_k"), col="black",
+              linetype="dashed")+
+    geom_path(aes_string(x = "distances", y = "upper_k"), col="black",
+              linetype="dashed")+
+    geom_path(aes_string(x = "distances", y = "obs_k"), col="blue")+
+    labs(x = "distances",
+         y = "empirical K-function")
+
+## ---- eval = FALSE------------------------------------------------------------
+#  kfun_theatre$plotg
+
+## ---- echo=FALSE, fig.show='hold', fig.align = 'center'-----------------------
+ggplot(plot_df)+
+    geom_ribbon(aes_string(x = "distances", ymin="lower_g", ymax = "upper_g"),
+                fill = grDevices::rgb(0.1,0.1,0.1),alpha=0.4, )+
+    geom_path(aes_string(x = "distances", y = "lower_g"), col="black",
+              linetype="dashed")+
+    geom_path(aes_string(x = "distances", y = "upper_g"), col="black",
+              linetype="dashed")+
+    geom_path(aes_string(x = "distances", y = "obs_g"), col="blue")+
+    labs(x = "distances",
+         y = "empirical G-function")
 
 ## ----fig.align="center", fig.show='hold', message=FALSE, warning=FALSE, eval = FALSE----
 #  kfun_biblio <- kfunctions(main_network_mtl, mtl_libraries,
@@ -48,10 +72,33 @@ kfun_theatre$plotg
 #  kfun_biblio$plotk
 
 ## ----echo=FALSE, fig.align="center", fig.show='hold', message=FALSE, warning=FALSE----
-kfun_biblio$plotk
+plot_df <- kfun_biblio$values
 
-## ---- fig.show='hold', fig.align = 'center'-----------------------------------
-kfun_biblio$plotg
+ggplot(plot_df)+
+    geom_ribbon(aes_string(x = "distances", ymin="lower_k",ymax = "upper_k"),
+                fill = grDevices::rgb(0.1,0.1,0.1), alpha=0.4)+
+    geom_path(aes_string(x = "distances", y = "lower_k"), col="black",
+              linetype="dashed")+
+    geom_path(aes_string(x = "distances", y = "upper_k"), col="black",
+              linetype="dashed")+
+    geom_path(aes_string(x = "distances", y = "obs_k"), col="blue")+
+    labs(x = "distances",
+         y = "empirical K-function")
+
+## ---- eval = FALSE------------------------------------------------------------
+#  kfun_biblio$plotg
+
+## ---- echo=FALSE, fig.show='hold', fig.align = 'center'-----------------------
+ggplot(plot_df)+
+    geom_ribbon(aes_string(x = "distances", ymin="lower_g", ymax = "upper_g"),
+                fill = grDevices::rgb(0.1,0.1,0.1),alpha=0.4, )+
+    geom_path(aes_string(x = "distances", y = "lower_g"), col="black",
+              linetype="dashed")+
+    geom_path(aes_string(x = "distances", y = "upper_g"), col="black",
+              linetype="dashed")+
+    geom_path(aes_string(x = "distances", y = "obs_g"), col="blue")+
+    labs(x = "distances",
+         y = "empirical G-function")
 
 ## ----fig.align="center", fig.show='hold', message=FALSE, warning=FALSE, eval = FALSE----
 #  cross_biblio_theatre <- cross_kfunctions(main_network_mtl, mtl_libraries,
@@ -61,7 +108,18 @@ kfun_biblio$plotg
 #  cross_biblio_theatre$plotk
 
 ## ----echo=FALSE, fig.align="center", fig.show='hold', message=FALSE, warning=FALSE----
-cross_biblio_theatre$plotk
+plot_df <- cross_biblio_theatre$values
+
+ggplot(plot_df)+
+    geom_ribbon(aes_string(x = "distances", ymin="lower_k",ymax = "upper_k"),
+                fill = grDevices::rgb(0.1,0.1,0.1), alpha=0.4)+
+    geom_path(aes_string(x = "distances", y = "lower_k"), col="black",
+              linetype="dashed")+
+    geom_path(aes_string(x = "distances", y = "upper_k"), col="black",
+              linetype="dashed")+
+    geom_path(aes_string(x = "distances", y = "obs_k"), col="blue")+
+    labs(x = "distances",
+         y = "empirical K-function")
 
 ## ----fig.align="center", fig.show='hold', message=FALSE, warning=FALSE, eval = FALSE----
 #  cross_theatre_biblio <- cross_kfunctions(main_network_mtl, mtl_theatres,
@@ -71,7 +129,18 @@ cross_biblio_theatre$plotk
 #  cross_theatre_biblio$plotk
 
 ## ----echo=FALSE, fig.align="center", fig.show='hold', message=FALSE, warning=FALSE----
-cross_theatre_biblio$plotk
+plot_df <- cross_theatre_biblio$values
+
+ggplot(plot_df)+
+    geom_ribbon(aes_string(x = "distances", ymin="lower_k",ymax = "upper_k"),
+                fill = grDevices::rgb(0.1,0.1,0.1), alpha=0.4)+
+    geom_path(aes_string(x = "distances", y = "lower_k"), col="black",
+              linetype="dashed")+
+    geom_path(aes_string(x = "distances", y = "upper_k"), col="black",
+              linetype="dashed")+
+    geom_path(aes_string(x = "distances", y = "obs_k"), col="blue")+
+    labs(x = "distances",
+         y = "empirical K-function")
 
 ## ----include = FALSE----------------------------------------------------------
 # reset all the user parameters

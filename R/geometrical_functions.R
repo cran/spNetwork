@@ -6,6 +6,7 @@
 #defining some global variables to prevent check error (weird flex but ok)
 utils::globalVariables(c("Xs", "Ys"))
 
+
 #' @title Coordinates to unique character vector
 #'
 #' @description Generate a character vector based on a coordinates matrix and
@@ -21,6 +22,8 @@ utils::globalVariables(c("Xs", "Ys"))
 sp_char_index <- function(coords, digits) {
     tempdf <- data.frame(Xs = as.character(coords[, 1]),
                          Ys = as.character(coords[, 2]))
+    tempdf$Xs <- ifelse(grepl(".",tempdf$Xs,fixed = TRUE), tempdf$Xs, paste(tempdf$Xs,".0",sep=""))
+    tempdf$Ys <- ifelse(grepl(".",tempdf$Ys,fixed = TRUE), tempdf$Ys, paste(tempdf$Ys,".0",sep=""))
     tempdt <- data.table(tempdf)
 
     tempdt[,  c("xint", "xdec") := tstrsplit(Xs, ".", fixed = TRUE)]
@@ -67,6 +70,10 @@ lines_extremities <- function(lines) {
     })
     ids <- do.call("c", ids)
     types <- do.call("c", types)
+    # if lines has only one columns, we can endup with weird results
+    if(length(names(lines))==1){
+        lines$tempcol <- 1
+    }
     data <- lines@data[ids, ]
     data$X <- newpts[, 1]
     data$Y <- newpts[, 2]
@@ -75,6 +82,7 @@ lines_extremities <- function(lines) {
     raster::crs(data) <- raster::crs(lines)
     return(data)
 }
+
 
 #' @title Remove loops
 #'
@@ -100,18 +108,25 @@ remove_loop_lines <- function(lines, digits){
 
 #' @title Unify lines direction
 #'
-#' @description A function to deal with the directions of lines.
+#' @description A function to deal with the directions of lines. It ensures
+#' that only From-To situation are present by reverting To-From lines. For
+#' the lines labelled as To-From, the order of their vertices is reverted.
 #'
 #' @param lines A SpatialLinesDataFrame
-#' @param field Indicate a field giving informations about authorized
-#' traveling direction on lines. if NULL, then all lines can be used in both
+#' @param field Indicate a field giving information about authorized
+#' travelling direction on lines. if NULL, then all lines can be used in both
 #' directions. Must be the name of a column otherwise. The values of the
 #' column must be "FT" (From - To), "TF" (To - From) or "Both".
 #' @return A SpatialLinesDataFrame
 #' @importFrom sp coordinates Line Lines SpatialLines SpatialLinesDataFrame
-#' @keywords internal
+#' @export
 #' @examples
-#' #This is an internal function, no example provided
+#' networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
+#' mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
+#' mtl_network$length <- rgeos::gLength(mtl_network, byid = TRUE)
+#' mtl_network$direction <- "Both"
+#' mtl_network[6, "direction"] <- "TF"
+#' mtl_network_directed <- lines_direction(mtl_network, "direction")
 lines_direction <- function(lines,field){
     listlines <- lapply(1:nrow(lines),function(i){
         line <- lines[i,]
@@ -131,51 +146,83 @@ lines_direction <- function(lines,field){
 }
 
 
-#' @title Add vertices to a single line
+#' @title Reverse lines
 #'
-#' @description Add vertices (SpatialPoints) to a single line (SpatialLines),
-#'   may fail if the lines geometries are self intersecting.
+#' @description A function to reverse the order of the vertices of lines
 #'
-#' @param line The SpatialLine to modify
-#' @param points The SpatialPoints to add to as vertex to the lines
-#' @param i The index of the line (for recombining after all lines)
-#' @param mindist The minimum distance between one point and the extremity of
-#'   the line to add the point as a vertex.
-#' @return A matrix of coordinates to build the new line
-#' @importFrom rgeos gProject
-#' @importFrom sp coordinates SpatialPoints Line Lines
+#' @param lines A SpatialLinesDataFrame
+#' @return A SpatialLinesDataFrame
+#' @importFrom sp coordinates Line Lines SpatialLines SpatialLinesDataFrame
 #' @keywords internal
 #' @examples
 #' #This is an internal function, no example provided
-add_vertices <- function(line, points, i, mindist) {
-    # extract coordinates
-    line_coords <- coordinates(line)[[1]][[1]]
-    original_distances <- sapply(1:nrow(line_coords),function(i){
-        if (i==0){
-            return(0)
-        }else{
-            return(sqrt(sum((line_coords[i,]-line_coords[i-1,])**2)))
-        }
+reverse_lines <- function(lines){
+    new_coords <- lapply(1:nrow(lines), function(i){
+        l <- lines[i,]
+        coords <- unlist(sp::coordinates(l),recursive = TRUE)
+        coords <- matrix(coords, nrow = length(coords)/2, ncol = 2)
+        return(coords[nrow(coords):1,])
     })
-    line_coords <- cbind(line_coords, cumsum(original_distances))
-    tot_lengths <- max(line_coords[,3])
-    # calculate lengths
-    pt_coords <- coordinates(points)
-    lengths <- gProject(line, points)
-    pt_coords <- cbind(pt_coords, lengths)
-    pt_coords <- pt_coords[(lengths>mindist & lengths<(tot_lengths-mindist)),]
-    all_coords <- rbind(line_coords,pt_coords)
-    # reorder the coordinate matrix
-    ord_coords <- all_coords[order(all_coords[,3]), ]
-    return(ord_coords[,1:2])
+    final_lines <- do.call(raster::spLines,new_coords)
+    final_lines <- SpatialLinesDataFrame(final_lines,
+                                         lines@data,match.ID = FALSE)
+    raster::crs(final_lines) <- raster::crs(lines)
+    return(final_lines)
 }
 
+
+# This is the previous version of the function
+# add_vertices <- function(line, points, i, mindist) {
+#     # extract coordinates
+#     line_coords <- coordinates(line)[[1]][[1]]
+#     original_distances <- sapply(1:nrow(line_coords),function(i){
+#         if (i==0){
+#             return(0)
+#         }else{
+#             return(sqrt(sum((line_coords[i,]-line_coords[i-1,])**2)))
+#         }
+#     })
+#     line_coords <- cbind(line_coords, cumsum(original_distances))
+#     tot_lengths <- max(line_coords[,3])
+#     # calculate lengths
+#     pt_coords <- coordinates(points)
+#     lengths <- gProject(line, points)
+#     pt_coords <- cbind(pt_coords, lengths)
+#     pt_coords <- pt_coords[(lengths>mindist & lengths<(tot_lengths-mindist)),]
+#     all_coords <- rbind(line_coords,pt_coords)
+#     # reorder the coordinate matrix
+#     ord_coords <- all_coords[order(all_coords[,3]), ]
+#     return(ord_coords[,1:2])
+# }
+# it is kept here in case of bugs with the new one using c++
+# add_vertices_lines <- function(lines, points, nearest_lines_idx, mindist) {
+#     #pb <- txtProgressBar(min = 0, max = nrow(lines), style = 3)
+#     new_lines_list <- lapply(1:nrow(lines), function(i) {
+#         #setTxtProgressBar(pb, i)
+#         line <- lines[i, ]
+#         testpts <- nearest_lines_idx == i
+#         if (any(testpts)) {
+#             okpts <- subset(points,testpts)
+#             newline <- add_vertices(line, okpts, i, mindist)
+#             return(newline)
+#         } else {
+#             sline <- coordinates(line)[[1]][[1]]
+#             return(sline)
+#         }
+#
+#     })
+#     final_lines <- do.call(raster::spLines,new_lines_list)
+#     final_lines <- SpatialLinesDataFrame(final_lines,
+#                                          lines@data,match.ID = FALSE)
+#     raster::crs(final_lines) <- raster::crs(lines)
+#     return(final_lines)
+# }
 
 
 #' @title Add vertices to a SpatialLinesDataFrame
 #'
 #' @description Add vertices (SpatialPoints) to their nearest lines
-#'   (SpatialLines), may fail if the lines geometries are self intersecting.
+#'   (SpatialLines), may fail if the line geometries are self intersecting.
 #'
 #' @param lines The SpatialLinesDataframe to modify
 #' @param points The SpatialPoints to add to as vertex to the lines
@@ -190,21 +237,13 @@ add_vertices <- function(line, points, i, mindist) {
 #' @examples
 #' #This is an internal function, no example provided
 add_vertices_lines <- function(lines, points, nearest_lines_idx, mindist) {
-    #pb <- txtProgressBar(min = 0, max = nrow(lines), style = 3)
-    new_lines_list <- lapply(1:nrow(lines), function(i) {
-        #setTxtProgressBar(pb, i)
-        line <- lines[i, ]
-        testpts <- nearest_lines_idx == i
-        if (any(testpts)) {
-            okpts <- subset(points,testpts)
-            newline <- add_vertices(line, okpts, i, mindist)
-            return(newline)
-        } else {
-            sline <- coordinates(line)[[1]][[1]]
-            return(sline)
-        }
 
-    })
+    line_coords <- unlist(sp::coordinates(lines),recursive = FALSE)
+    pt_coords <- sp::coordinates(points)
+
+    new_lines_list <- add_vertices_lines_cpp(pt_coords, line_coords, nearest_lines_idx, mindist)
+
+
     final_lines <- do.call(raster::spLines,new_lines_list)
     final_lines <- SpatialLinesDataFrame(final_lines,
                                          lines@data,match.ID = FALSE)
@@ -213,10 +252,79 @@ add_vertices_lines <- function(lines, points, nearest_lines_idx, mindist) {
 }
 
 
+# the old version is kept for debug
+# lixelize_lines <- function(lines, lx_length, mindist = NULL, verbose = FALSE) {
+#     if (is.null(mindist)) {
+#         mindist <- lx_length/10
+#     }
+#     if(verbose){
+#         pb <- txtProgressBar(min = 0, max = nrow(lines), style = 3)
+#     }
+#     newlixels <- lapply(1:nrow(lines), function(i) {
+#         if(verbose){
+#             setTxtProgressBar(pb, i)
+#         }
+#         line <- lines[i, ]
+#         tot_length <- gLength(line)
+#         if (tot_length < lx_length+mindist) {
+#             coords <- coordinates(line)
+#             return(list(coords[[1]][[1]]))
+#         } else {
+#             # producing the points to snapp on
+#             distances <- seq(lx_length, tot_length, lx_length)
+#             if ((tot_length - distances[[length(distances)]]) < mindist) {
+#                 distances <- distances[1:(length(distances) - 1)]
+#             }
+#             points <- t(sapply(distances, function(d) {
+#                 return(coordinates(gInterpolate(line, d)))
+#             }))
+#             points <- data.frame(x = points[, 1], y = points[, 2],
+#                                  distance = distances,
+#                                  type = "cut")
+#             # extracting the original coordinates
+#             coords <- SpatialPoints(coordinates(line))
+#             xy <- coordinates(coords)
+#             points2 <- data.frame(x = xy[, 1],
+#                                   y = xy[, 2],
+#                                   distance = gProject(line,coords),
+#                                   type = "base")
+#             if(points2$distance[nrow(points2)]==0){
+#                 points2$distance[nrow(points2)] <- tot_length
+#             }
+#             # merging both and sorting
+#             allpts <- rbind(points, points2)
+#             allpts <- allpts[order(allpts$distance, allpts$type), ]
+#             # I should remove duplicates here
+#             allpts <- allpts[!duplicated(allpts[1:3]),]
+#             # and now splitting this motherfucker
+#             indices <- c(0, which(allpts$type == "cut"), nrow(allpts))
+#             lixels <- lapply(1:(length(indices) - 1), function(j) {
+#                 pts <- allpts[indices[[j]]:indices[[j + 1]], ]
+#                 return(as.matrix(pts[, 1:2]))
+#             })
+#             return(lixels)
+#         }
+#     })
+#     oids <- lapply(1:nrow(lines), function(i) {
+#         return(rep(i, length(newlixels[[i]])))
+#     })
+#     oids <- do.call("c", oids)
+#
+#     new_lines <- do.call(raster::spLines,unlist(newlixels,recursive = FALSE))
+#     df <- lines@data[oids, ]
+#     if(class(df) != "dataframe"){
+#         df <- data.frame("oid" = df)
+#     }
+#     new_splines <- SpatialLinesDataFrame(new_lines, df, match.ID = FALSE)
+#     raster::crs(new_splines) <- raster::crs(lines)
+#     return(new_splines)
+#
+# }
+
 #' @title Cut lines into lixels
 #'
 #' @description Cut a SpatialLines object into lixels with a specified minimal
-#'   distance may fail if the lines geometries are self intersecting.
+#'   distance may fail if the line geometries are self intersecting.
 #'
 #' @param lines The SpatialLinesDataframe to modify
 #' @param lx_length The length of a lixel
@@ -224,90 +332,51 @@ add_vertices_lines <- function(lines, points, nearest_lines_idx, mindist) {
 #'   final lixel is shorter than the minimum distance, then it is added to the
 #'   previous lixel. if NULL, then mindist = maxdist/10. Note that the segments
 #'   that are already shorter than the minimum distance are not modified.
-#' @param verbose A Boolean indicating if a progress bar should be displayed
 #' @return An object of class SpatialLinesDataFrame (package sp)
 #' @importFrom utils txtProgressBar setTxtProgressBar
 #' @importFrom  sp coordinates Line Lines SpatialLines SpatialLinesDataFrame
 #'   SpatialPoints
-#' @importFrom rgeos gLength gInterpolate
+#' @importFrom rgeos gLength gInterpolate gProject
 #' @export
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
 #' mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
 #' lixels <- lixelize_lines(mtl_network,150,50)
 #' }
-lixelize_lines <- function(lines, lx_length, mindist = NULL, verbose = FALSE) {
+lixelize_lines<- function(lines, lx_length, mindist = NULL) {
+
     if (is.null(mindist)) {
         mindist <- lx_length/10
     }
-    if(verbose){
-        pb <- txtProgressBar(min = 0, max = nrow(lines), style = 3)
-    }
-    newlixels <- lapply(1:nrow(lines), function(i) {
-        if(verbose){
-            setTxtProgressBar(pb, i)
-        }
-        line <- lines[i, ]
-        tot_length <- gLength(line)
-        if (tot_length < lx_length+mindist) {
-            coords <- coordinates(line)
-            return(list(coords[[1]][[1]]))
-        } else {
-            # producing the points to snapp on
-            distances <- seq(lx_length, tot_length, lx_length)
-            if ((tot_length - distances[[length(distances)]]) < mindist) {
-                distances <- distances[1:(length(distances) - 1)]
-            }
-            points <- t(sapply(distances, function(d) {
-                return(coordinates(gInterpolate(line, d)))
-            }))
-            points <- data.frame(x = points[, 1], y = points[, 2],
-                                 distance = distances,
-                                 type = "cut")
-            # extracting the original coordinates
-            coords <- SpatialPoints(coordinates(line))
-            xy <- coordinates(coords)
-            points2 <- data.frame(x = xy[, 1],
-                                  y = xy[, 2],
-                                  distance = gProject(line,coords),
-                                  type = "base")
-            if(points2$distance[nrow(points2)]==0){
-                points2$distance[nrow(points2)] <- tot_length
-            }
-            # merging both and sorting
-            allpts <- rbind(points, points2)
-            allpts <- allpts[order(allpts$distance), ]
-            # and now splitting this motherfucker
-            indices <- c(0, which(allpts$type == "cut"), nrow(allpts))
-            lixels <- lapply(1:(length(indices) - 1), function(j) {
-                pts <- allpts[indices[[j]]:indices[[j + 1]], ]
-                return(as.matrix(pts[, 1:2]))
-            })
-            return(lixels)
-        }
-    })
-    oids <- lapply(1:nrow(lines), function(i) {
-        return(rep(i, length(newlixels[[i]])))
-    })
-    oids <- do.call("c", oids)
 
-    new_lines <- do.call(raster::spLines,unlist(newlixels,recursive = FALSE))
-    df <- lines@data[oids, ]
+    if(lx_length <= mindist){
+        stop("The lixel length (lx_length) must be greater than minimum length (mindist)")
+    }
+
+    coords <- unlist(sp::coordinates(lines), recursive = FALSE)
+    result <- lixelize_lines_cpp(coords, lx_length, mindist)
+    final_lines <- do.call(raster::spLines, result[[1]])
+
+    df <- lines@data[result[[2]]+1, ]
+
     if(class(df) != "dataframe"){
-        df <- data.frame("oid" = df)
+        df <- as.data.frame(df)
     }
-    new_splines <- SpatialLinesDataFrame(new_lines, df, match.ID = FALSE)
-    raster::crs(new_splines) <- raster::crs(lines)
-    return(new_splines)
 
+    final_lines <- SpatialLinesDataFrame(final_lines, df,
+                                         match.ID = FALSE)
+
+    raster::crs(final_lines) <- raster::crs(lines)
+    return(final_lines)
 }
+
 
 
 #'@title Cut lines into lixels (multicore)
 #'
 #'@description Cut a SpatialLines object into lixels with a specified minimal
-#'  distance may fail if the lines geometries are self intersecting with
+#'  distance may fail if the line geometries are self intersecting with
 #'  multicore support.
 #'
 #'@param lines The SpatialLinesDataframe to modify
@@ -322,7 +391,7 @@ lixelize_lines <- function(lines, lx_length, mindist = NULL, verbose = FALSE) {
 #'@export
 #'@importFrom utils capture.output
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
 #' mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
 #' future::plan(future::multisession(workers=2))
@@ -384,7 +453,7 @@ simple_lines <- function(lines) {
     oids <- sapply(1:nrow(lines), function(i) {
         return(rep(i, counts[[i]]))
     })
-    if(nrow(lines)>1){
+    if(nrow(lines)>1 & is.list(oids)){
         oids <- do.call("c", oids)
     }
 
@@ -405,10 +474,10 @@ simple_lines <- function(lines) {
     return(final_lines)
 }
 
-#' @title Center points of lines
+#' @title Centre points of lines
 #'
-#' @description Generate a SpatialPointsDataFrame with line center points. The
-#'   points are located at center of the line based on the length of the line.
+#' @description Generate a SpatialPointsDataFrame with points at the centre of
+#'   lines. The length of the lines is used to determine its centre.
 #'
 #' @param lines The SpatialLinesDataframe to use
 #' @return An object of class SpatialPointsDataFrame (package sp)
@@ -417,14 +486,37 @@ simple_lines <- function(lines) {
 #' @importFrom utils txtProgressBar setTxtProgressBar
 #' @export
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
 #' mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
 #' centers <- lines_center(mtl_network)
 #' }
 lines_center <- function(lines) {
-    centerpoints <- maptools::SpatialLinesMidPoints(lines)
-    return(centerpoints)
+
+    lines$baseorder <- 1:nrow(lines)
+    all_lengths <- rgeos::gLength(lines, byid = TRUE)
+    no_length <- subset(lines, all_lengths == 0)
+    with_length <- subset(lines, all_lengths>0)
+
+    pts1 <- maptools::SpatialLinesMidPoints(with_length)
+    pts1$Ind <- NULL
+    coords1 <- sp::coordinates(pts1)
+    data1 <- pts1@data
+
+    coords <- sp::coordinates(no_length)
+    coords2 <- do.call(rbind,lapply(coords, function(i){
+        return(i[[1]][1,])
+    }))
+    data2 <- no_length@data
+
+    alldata <- rbind(data1,data2)
+    allcoords <- rbind(coords1,coords2)
+    sp::coordinates(alldata) <- allcoords
+    raster::crs(alldata) <- raster::crs(lines)
+    alldata <- alldata[order(alldata$baseorder),]
+    alldata$baseorder <- NULL
+
+    return(alldata)
 }
 
 #' @title Add center vertex to lines
@@ -441,65 +533,13 @@ lines_center <- function(lines) {
 #' @examples
 #' #This is an internal function, no example provided
 add_center_lines <- function(lines) {
-    pb <- txtProgressBar(min = 0, max = nrow(lines), style = 3)
-    listline <- sapply(1:nrow(lines), function(i) {
-        setTxtProgressBar(pb, i)
-        line <- lines[i, ]
-        pt <- gInterpolate(line, gLength(line) / 2)
-        newline <- add_vertices(line, pt, i)
-        return(newline)
-    })
-    final_lines <- SpatialLinesDataFrame(SpatialLines(listline), lines@data,
-        match.ID = FALSE)
+    coords <- unlist(sp::coordinates(lines), recursive = FALSE)
+    new_coords <- add_center_lines_cpp(coords)
+
+    final_lines <- do.call(raster::spLines, new_coords)
+    final_lines <- SpatialLinesDataFrame(final_lines, lines@data,
+                                         match.ID = FALSE)
     raster::crs(final_lines) <- raster::crs(lines)
-    return(final_lines)
-}
-
-
-#'@title Add center vertex to lines (multicore)
-#'
-#'@description Add to each line of a SpatialLinesDataFrame an additional vertex
-#'  at its center with multicore support.
-#'
-#'@param lines The SpatialLinesDataframe to use
-#'@param show_progress A Boolean indicating if a progress bar must be displayed
-#'@param chunk_size The size of a chunk used for multiprocessing. Default is
-#'  100.
-#'@return An object of class SpatialLinesDataframe (package sp)
-#'@importFrom utils capture.output
-#'@keywords internal
-#' @examples
-#' #This is an internal function, no example provided
-#' \dontshow{
-#'    ## R CMD check: make sure any open connections are closed afterward
-#'    if (!inherits(future::plan(), "sequential")) future::plan(future::sequential)
-#'}
-add_center_lines.mc <- function(lines, show_progress = TRUE, chunk_size = 100) {
-    # step1 : splitting the data into chunks
-    chunks <- split(1:nrow(lines), rep(1:ceiling(nrow(lines) / chunk_size), each = chunk_size,
-        length.out = nrow(lines)))
-    chunks <- lapply(chunks, function(x){return(lines[x,])})
-    # step2 : starting the function
-    iseq <- 1:length(chunks)
-    if (show_progress) {
-        progressr::with_progress({
-            p <- progressr::progressor(along = iseq)
-            values <- future.apply::future_lapply(iseq, function(i) {
-                p(sprintf("i=%g", i))
-                chunk_lines <- chunks[[i]]
-                invisible(capture.output(new_lines <- add_center_lines(chunk_lines)))
-                return(new_lines)
-            })
-        })
-    } else {
-        values <- future.apply::future_lapply(iseq, function(i) {
-            chunk_lines <- chunks[[i]]
-            invisible(capture.output(new_lines <- add_center_lines(chunk_lines)))
-            return(new_lines)
-        })
-    }
-
-    final_lines <- do.call("rbind", values)
     return(final_lines)
 }
 
@@ -514,7 +554,7 @@ add_center_lines.mc <- function(lines, show_progress = TRUE, chunk_size = 100) {
 #' @importFrom utils capture.output
 #' @export
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
 #' mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
 #' new_pts <- lines_points_along(mtl_network,50)
@@ -531,8 +571,11 @@ lines_points_along <- function(lines,dist){
     oids <- lapply(1:length(list_pts),function(i){rep(i,length(list_pts[[i]]))})
     oids <- do.call("c",oids)
     all_pts <- do.call(rbind,list_pts)
+    # adding a useless column to avoid a bug when lines has only one column
+    lines$tmpOID <- 1:nrow(lines)
     data <- lines@data[oids,]
     all_pts <- sp::SpatialPointsDataFrame(all_pts,data)
+    all_pts$tmpOID <- NULL
     return(all_pts)
 }
 
@@ -559,7 +602,7 @@ surrounding_points <- function(polygons,dist){
     boundaries <- gBoundary(polygons, byid = TRUE)
     df <- sp::SpatialLinesDataFrame(boundaries,polygons@data)
     all_pts <- lines_points_along(df,dist)
-    return(df)
+    return(all_pts)
 }
 
 
@@ -657,24 +700,55 @@ nearestPointOnLine <- function(coordsLine, coordsPoint){
 
 }
 
+# NOTE: this code is kept if bugs are encountered in the new version using
+# BH instead of sf.
+# @title Nearest feature
+#
+# @description Find the nearest feature from set X in set Y
+#
+# @param x A SpatialDataFrame
+# @param y A SpatialDataFrame
+#
+# @return A numeric vector with the index of the nearest features
+# @keywords internal
+# @examples
+# #This is an internal function, no example provided
+# nearest <- function(x,y){
+#     sf1 <- sf::st_as_sf(x)
+#     sf2 <- sf::st_as_sf(y)
+#     sf::st_crs(sf1) <- sf::st_crs(sf2)
+#     best <- sf::st_nearest_feature(sf1,sf2)
+#     return(best)
+# }
 
-#' @title Nearest feature
-#'
-#' @description Find the nearest feature from set X in set Y
-#'
-#' @param x A SpatialDataFrame
-#' @param y A SpatialDataFrame
-#'
-#' @return A numeric vector with the index of the nearest features
+#' @title Nearest line for points
+#' @description Find for each point its nearest LineString
+#' @param points A SpatialPointsDataFrame
+#' @param lines A SpatialLinesDataFrame
+#' @param snap_dist A distance (float) given to find for each point its
+#' nearest line in a spatial index. A too big value will produce
+#' unnecessary distance calculations and a too short value will lead to
+#' more iterations to find neighbours. In extrem cases, a too short value
+#' could lead to points not associated with lines (index = -1).
+#' @param max_iter An integer indicating how many iteration the search
+#' algorithm must perform in the spatial index to find lines close to a
+#' point. At each iteration, the snap_dist is doubled to find candidates.
 #' @keywords internal
 #' @examples
-#' #This is an internal function, no example provided
-nearest <- function(x,y){
-    sf1 <- sf::st_as_sf(x)
-    sf2 <- sf::st_as_sf(y)
-    sf::st_crs(sf1) <- sf::st_crs(sf2)
-    best <- sf::st_nearest_feature(sf1,sf2)
-    return(best)
+#' # this is an internal function, no example provided
+nearest_lines <- function(points, lines, snap_dist = 300, max_iter = 10){
+
+    # getting the coordinates of the lines
+    list_lines <- unlist(sp::coordinates(lines), recursive = FALSE)
+
+    # getting the coordinates of the points
+    coords <- sp::coordinates(points)
+
+    # getting the indexes
+    idx <- find_nearest_object_in_line_rtree(coords, list_lines, snap_dist, max_iter)
+
+    # adding 1 to match with c++ indexing
+    return(idx+1)
 }
 
 
@@ -685,18 +759,37 @@ nearest <- function(x,y){
 #' @param points A SpatialPointsDataFrame
 #' @param lines A SpatialLinesDataFrame
 #' @param idField The name of the column to use as index for the lines
+#' @param snap_dist A distance (float) given to find for each point its
+#' nearest line in a spatial index. A too big value will produce
+#' unnecessary distance calculations and a too short value will lead to
+#' more iterations to find neighbours. In extrem cases, a too short value
+#' could lead to points not associated with lines (index = -1).
+#' @param max_iter An integer indicating how many iteration the search
+#' algorithm must perform in the spatial index to find lines close to a
+#' point. At each iteration, the snap_dist is doubled to find candidates.
 #'
 #' @return A SpatialPointsDataFrame with the projected geometries
 #' @keywords internal
 #' @importFrom methods slot
+#' @export
 #' @examples
-#' #This is an internal function, no example provided
-snapPointsToLines2 <- function(points, lines ,idField = NA) {
+#' # reading the data
+#' networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
+#' mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
+#' eventsgpkg <- system.file("extdata", "events.gpkg", package = "spNetwork", mustWork = TRUE)
+#' bike_accidents <- rgdal::readOGR(eventsgpkg,layer="bike_accidents", verbose=FALSE)
+#' mtl_network$LineID <- 1:nrow(mtl_network)
+#' # snapping point to lines
+#' snapped_points <- snapPointsToLines2(bike_accidents,
+#'     mtl_network,
+#'     "LineID"
+#' )
+snapPointsToLines2 <- function(points, lines ,idField = NA, snap_dist = 300, max_iter = 10) {
 
-    nearest_line_index <- nearest(points,lines)
+    #nearest_line_index <- nearest(points,lines)
+    nearest_line_index <- nearest_lines(points,lines, snap_dist, max_iter)
     coordsLines <- sp::coordinates(lines)
     coordsPoints <- sp::coordinates(points)
-
 
     # Get coordinates of nearest points lying on nearest lines
     mNewCoords <- vapply(1:length(points),function(x){
@@ -719,4 +812,413 @@ snapPointsToLines2 <- function(points, lines ,idField = NA) {
 
 }
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Network Cleaning Functions ####
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+#' @title Heal edges
+#'
+#' @description Merge Lines if they form a longer linestring without external intersections (experimental)
+#'
+#' @param lines A SpatialLinesDataFrame
+#' @param digits An integer indicating the number of digits to keep in coordinates
+#' @param verbose A boolean indicating if a progress bar should be displayed
+#'
+#' @return A SpatialLinesDataFrame with the eventually merged geometries. Note
+#' that if lines are merged, only the attributes of the first line are preserved
+#' @keywords internal
+#' @importFrom sp coordinates SpatialLinesDataFrame
+#' @importFrom data.table as.data.table setDT :=
+#' @importFrom utils txtProgressBar setTxtProgressBar
+#' @examples
+#' #This is an internal function, no example provided
+heal_edges <- function(lines,digits = 3, verbose = TRUE){
+    ## healing step
+
+    #first getting the coordinates of each point
+    lines$tmpOID <- 1:nrow(lines)
+    coords <- lines_extremities(lines)
+    coords$spindex <- sp_char_index(sp::coordinates(coords),digits)
+
+    #then counting for each point how many times it appears
+    counts <- table(coords$spindex)
+    countdf <- data.frame(
+        count = as.vector(counts),
+        spindex = names(counts)
+    )
+
+    #if a point appears exactly twice, it might require a healing
+    cases <- subset(countdf, countdf$count==2)
+    consid_points <- subset(coords, coords$spindex %in% cases$spindex)
+
+    #adding the start and end sp index to each line
+    startpts <- subset(coords, coords$pttype=="start")
+    endpts <- subset(coords, coords$pttype=="end")
+
+    tempDT <- as.data.table(lines@data)
+    lines$startidx <- setDT(tempDT)[startpts@data, on = "tmpOID", "startidx" := startpts$spindex][]$startidx
+    lines$endidx <- setDT(tempDT)[endpts@data, on = "tmpOID", "endidx" := endpts$spindex][]$endidx
+
+
+    test <- (lines$startidx %in% consid_points$spindex | lines$endidx %in% consid_points$spindex)
+    consid_lines <- subset(lines, test)
+    keeped_lines <- subset(lines, test == FALSE)
+
+    #adding the start and end sp index to each line
+    startpts <- subset(coords, coords$pttype=="start")
+    endpts <- subset(coords, coords$pttype=="end")
+
+    consid_lines$tmpOID <- as.character(consid_lines$tmpOID)
+    # generating a neighbouring list from the extremies
+
+    neighbouring <- lapply(1:nrow(consid_lines), function(i){
+        line <- consid_lines[i,]
+        val1 <- line$startidx
+        val2 <- line$endidx
+        if(val1 %in% consid_points$spindex){
+            test1 <- (consid_lines$startidx == val1 | consid_lines$endidx == val1) &
+                               ((consid_lines$startidx == val1 & consid_lines$endidx == val2)==FALSE
+            )
+        }else{
+            test1 <- rep(FALSE, nrow(consid_lines))
+        }
+        if(val2 %in% consid_points$spindex){
+            test2 <- (consid_lines$startidx == val2 | consid_lines$endidx == val2) &
+                ((consid_lines$startidx == val1 & consid_lines$endidx == val2)==FALSE
+                )
+        }else{
+            test2 <- rep(FALSE, nrow(consid_lines))
+        }
+        neighbours <- subset(consid_lines, test1 | test2)
+
+        codes <- neighbours$tmpOID
+        return(codes)
+    })
+    names(neighbouring) <- consid_lines$tmpOID
+
+    ## ok now we must find the routes that we should merge
+    merged <- c()
+    if(verbose){
+        pb <- txtProgressBar(min = 0, max = nrow(consid_lines), style = 3)
+    }
+    merge_with <- lapply(1:nrow(consid_lines), function(i){
+        line <- consid_lines[i,]
+        if(verbose){
+            setTxtProgressBar(pb, i)
+        }
+        all_neighbours <- c()
+        next_check <- line$tmpOID
+        while (length(next_check) > 0){
+            neighbours <- do.call(c,lapply(next_check, function(x){
+                neighbouring[[x]]
+            }))
+            neighbours <- neighbours[(neighbours %in% merged) == FALSE]
+            next_check <- neighbours
+            merged <<- c(merged,neighbours)
+            all_neighbours <- c(all_neighbours,neighbours)
+        }
+        return(all_neighbours)
+    })
+    merge_with <- Filter(function(x) length(x) > 0, merge_with)
+    merged_lines <- do.call(rbind,lapply(merge_with, function(x){
+        sub <- subset(consid_lines, consid_lines$tmpOID %in% x)
+        return(rgeos::gLineMerge(sub))
+    }))
+    df <- do.call(rbind,lapply(merge_with, function(x){
+        sub <- subset(consid_lines, consid_lines$tmpOID %in% x)
+        return(sub@data[1,])
+    }))
+
+    new_sp <- SpatialLinesDataFrame(merged_lines, df, match.ID = F)
+    new_sp$startidx <- NULL
+    new_sp$endidx <- NULL
+    keeped_lines$startidx <- NULL
+    keeped_lines$endidx <- NULL
+    new_lines <- rbind(keeped_lines, new_sp)
+    new_lines$tmpOID <- NULL
+    return(new_lines)
+}
+
+#' @title Remove mirror edges
+#'
+#' @description Keep unique edges based on start and end point
+#'
+#' @param lines A SpatialLinesDataFrame
+#' @param keep_sortest A boolean, if TRUE, then the shortest line is keeped if
+#' several lines have the same starting point and ending point. if FALSE, then the
+#' longest line is keeped.
+#' @param digits An integer indicating the number of digits to keep in coordinates
+#'
+#' @return A SpatialLinesDataFrame with the mirror edges removed
+#' @keywords internal
+#' @importFrom sp coordinates
+#' @importFrom data.table as.data.table setDT :=
+#' @importFrom utils txtProgressBar setTxtProgressBar
+#' @examples
+#' #This is an internal function, no example provided
+remove_mirror_edges <- function(lines, keep_shortest = TRUE, digits = 3, verbose = TRUE){
+    # step1 : get start and end coordinates of each line
+    lines$tmpOID <- 1:nrow(lines)
+    coords <- lines_extremities(lines)
+    coords$spindex <- sp_char_index(sp::coordinates(coords),digits)
+    starts <- subset(coords, coords$pttype == "start")
+    ends <- subset(coords, coords$pttype == "end")
+    # merging with data.table
+    tempDT <- data.table::as.data.table(lines@data)
+    lines$startidx <- setDT(tempDT)[starts@data, on = "tmpOID", "startidx" := starts$spindex][]$startidx
+    lines$endidx <- setDT(tempDT)[ends@data, on = "tmpOID", "endidx" := ends$spindex][]$endidx
+
+    # create two sp_index (one start->end and end->start)
+    lines$idx1 <- paste(lines$startidx,lines$endidx,sep=" - ")
+    lines$idx2 <- paste(lines$endidx,lines$startidx,sep=" - ")
+
+    # step2 : for each line, find if another has the same paire of points (or reversed)
+    # if it is the case, flag the longest or shortest for a removal after
+    if(verbose){
+        pb <- txtProgressBar(min = 0, max = nrow(lines), style = 3)
+    }
+    to_remove <- sapply(1:nrow(lines), function(i){
+        line <- lines[i,]
+        idx1 <- line$idx1
+        if(verbose){
+            setTxtProgressBar(pb, i)
+        }
+        test <- (lines$idx1 == idx1 | lines$idx2 == idx1)
+        if (sum(test)>1){
+            sub <- subset(lines, test)
+            lengths <- rgeos::gLength(sub,byid = T)
+            # if all the lengths are equal
+            if(length(unique(lengths))==1){
+                if(sum(line$tmpOID > sub$tmpOID)==0){
+                    return(TRUE)
+                }else{
+                    return(FALSE)
+                }
+            }
+            # if some lengths are longer
+            l <- rgeos::gLength(line)
+            longest <- max(lengths)
+            if(keep_shortest){
+                if(longest > l){
+                    return(FALSE)
+                }else{
+                    return(TRUE)
+                }
+            }else{
+                if(longest < l){
+                    return(FALSE)
+                }else{
+                    return(TRUE)
+                }
+            }
+        }else{
+            return(FALSE)
+        }
+    })
+    keeped <- subset(lines, to_remove == FALSE)
+    return(keeped)
+}
+
+
+#' @title Simplify a network
+#'
+#' @description Simplify a network by applying two corrections: Healing edges and
+#' Removing mirror edges (experimental).
+#'
+#' @details Healing is the operation to merge two connected linestring if the are
+#' intersecting at one extremity and do not intersect any other linestring. It helps
+#' to reduce the complexity of the network and thus can reduce calculation time.
+#' Removing mirror edges is the operation to remove edges that have the same
+#' extremities. If two edges start at the same point and end at the same point,
+#' they do not add information in the network and one can be removed to simplify
+#' the network. One can decide to keep the longest of the two edges or the shortest.
+#' NOTE: the edge healing does not consider lines directions currently!
+#'
+#' @param lines A SpatialLinesDataFrame
+#' @param digits An integer indicating the number of digits to keep in coordinates
+#' @param heal A boolean indicating if the healing operation must be performed
+#' @param mirror A booleans indicating if the mirror edges must be removed
+#' @param keep_shortest A boolean, if TRUE, then the shortest line is keeped from
+#' mirror edges. if FALSE, then the longest line is keeped.
+#' @param verbose A boolean indicating if messages and progressbar should be displayed
+#' @return A SpatialLinesDataFrame
+#' @export
+#' @examples
+#' library(spNetwork)
+#' networkgpkg <- system.file("extdata", "networks.gpkg",package = "spNetwork", mustWork = TRUE)
+#' lines <- mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network",verbose = FALSE)
+#' edited_lines <- simplify_network(lines, digits = 3, verbose = FALSE)
+simplify_network <- function(lines, digits = 3, heal = TRUE, mirror = TRUE, keep_shortest = TRUE, verbose = TRUE){
+
+    if(heal){
+        if(verbose){
+            print("healing the connected edges...")
+        }
+        lines <- heal_edges(lines, digits, verbose)
+    }
+
+    if(mirror){
+        if(verbose){
+            print("removing mirror edges")
+        }
+        lines <- remove_mirror_edges(lines, keep_shortest, digits, verbose)
+    }
+
+    return(lines)
+}
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+#### Development ####
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+# # # this is the old function kept if bugs are found
+# split_at_vertices <- function(line, points, i, mindist) {
+#     # extract coordinates
+#     line_coords <- coordinates(line)[[1]][[1]]
+#     original_distances <- sapply(1:nrow(line_coords),function(i){
+#         if (i==0){
+#             return(0)
+#         }else{
+#             return(sqrt(sum((line_coords[i,]-line_coords[i-1,])**2)))
+#         }
+#     })
+#     line_coords <- cbind(line_coords, cumsum(original_distances),0)
+#     tot_lengths <- max(line_coords[,3])
+#     # calculate lengths
+#     pt_coords <- coordinates(points)
+#     lengths <- gProject(line, points)
+#     pt_coords <- cbind(pt_coords, lengths)
+#     pt_coords <- pt_coords[(lengths>mindist & lengths<(tot_lengths-mindist)),]
+#     if(is.null(nrow(pt_coords))){
+#         pt_coords <- c(pt_coords,1)
+#     }else{
+#         pt_coords <- cbind(pt_coords,1)
+#     }
+#
+#     all_coords <- rbind(line_coords,pt_coords)
+#     # reorder the coordinate matrix
+#     ord_coords <- all_coords[order(all_coords[,3]), ]
+#
+#     #split on new coordinates
+#     ruptidx <- unique(c(1,(1:nrow(ord_coords))[ord_coords[,4] == 1],nrow(ord_coords)))
+#     final_coords <- lapply(1:(length(ruptidx)-1), function(j){
+#         els <- ord_coords[ruptidx[[j]]:ruptidx[[j+1]],1:2]
+#     })
+#
+#     return(final_coords)
+# }
+
+# # this is the previous function, kept for debug
+# split_lines_at_vertex2 <- function(lines, points, nearest_lines_idx, mindist) {
+#     new_lines_list <- lapply(1:nrow(lines), function(i) {
+#         line <- lines[i, ]
+#         testpts <- nearest_lines_idx == i
+#         if (any(testpts)) {
+#             okpts <- subset(points,testpts)
+#             newline <- split_at_vertices(line, okpts, i, mindist)
+#             return(newline)
+#         } else {
+#             sline <- list(coordinates(line)[[1]][[1]])
+#             return(sline)
+#         }
+#     })
+#     final_lines <- do.call(raster::spLines,unlist(new_lines_list, recursive = FALSE))
+#     idxs <- do.call(c,lapply(1:length(new_lines_list), function(j){
+#         el <- new_lines_list[[j]]
+#         if (class(el) == "list"){
+#             return(rep(j,times = length(el)))
+#         }else{
+#             return(j)
+#         }
+#     }))
+#     final_lines <- SpatialLinesDataFrame(final_lines,
+#                                          lines@data[idxs,],match.ID = FALSE)
+#     raster::crs(final_lines) <- raster::crs(lines)
+#     return(final_lines)
+# }
+
+
+#' @title Split lines at vertices in a SpatialLinesDataFrame
+#'
+#' @description Split lines (SpatialLines) at their nearest vertices
+#' (SpatialPoints), may fail if the line geometries are self intersecting.
+#'
+#' @param lines The SpatialLinesDataframe to split
+#' @param points The SpatialPoints to add to as vertex to the lines
+#' @param nearest_lines_idx For each point, the index of the nearest line
+#' @param mindist The minimum distance between one point and the extremity of
+#'   the line to add the point as a vertex.
+#' @return An object of class SpatialLinesDataFrame (package sp)
+#' @importFrom sp coordinates SpatialPoints SpatialLinesDataFrame Line
+#'   SpatialLines
+#' @importFrom utils txtProgressBar setTxtProgressBar
+#' @export
+#' @examples
+#' # reading the data
+#' networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
+#' mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
+#' eventsgpkg <- system.file("extdata", "events.gpkg", package = "spNetwork", mustWork = TRUE)
+#' bike_accidents <- rgdal::readOGR(eventsgpkg,layer="bike_accidents", verbose=FALSE)
+#' # aggregating points within a 5 metres radius
+#' bike_accidents$weight <- 1
+#' agg_points <- aggregate_points(bike_accidents, 5)
+#' mtl_network$LineID <- 1:nrow(mtl_network)
+#' # snapping point to lines
+#' snapped_points <- snapPointsToLines2(agg_points,
+#'     mtl_network,
+#'     "LineID"
+#' )
+#' # splitting lines
+#' new_lines <- split_lines_at_vertex(mtl_network, snapped_points,
+#'     snapped_points$nearest_line_id, 1)
+split_lines_at_vertex <- function(lines, points, nearest_lines_idx, mindist) {
+
+    coords <- sp::coordinates(points)
+    lines_coords <- unlist(sp::coordinates(lines), recursive = FALSE)
+    elements <- split_lines_at_points_cpp(coords, lines_coords, nearest_lines_idx, mindist)
+    new_lines_list <- elements[[1]]
+    idxs <- elements[[2]]
+
+    final_lines <- do.call(raster::spLines,new_lines_list)
+
+    final_lines <- SpatialLinesDataFrame(final_lines,
+                                         lines@data[idxs,],match.ID = FALSE)
+    raster::crs(final_lines) <- raster::crs(lines)
+    return(final_lines)
+}
+
+
+
+
+#' @title Cut lines at a specified distance
+#'
+#' @description Cut lines (SpatialLines) at a specified distance from the
+#' begining of the lines.
+#'
+#' @param lines The SpatialLinesDataframe to cut
+#' @param dists A vector of distances, if only one value is given,
+#' each line will be cut at that distance.
+#' @return An object of class SpatialLinesDataFrame (package sp)
+#' @importFrom sp coordinates SpatialPoints SpatialLinesDataFrame Line
+#'   SpatialLines
+#' @keywords internal
+#' @examples
+#' # This is an interal function, no example provided
+cut_lines_at_distance <- function(lines, dists){
+
+    # step 1 : create a list of coordinates
+    # coord_lists <- lapply(1:nrow(lines), function(i){
+    #     l <- lines[i,]
+    #     coords <- unlist(sp::coordinates(l),recursive = TRUE)
+    #     coords <- matrix(coords, nrow = length(coords)/2, ncol = 2)
+    #     return(coords)
+    # })
+    coord_lists <- unlist(sp::coordinates(lines), recursive = FALSE)
+
+    new_coords <- cut_lines_at_distances_cpp(coord_lists, dists)
+    final_lines <- do.call(raster::spLines,new_coords)
+    final_lines <- SpatialLinesDataFrame(final_lines,
+                                         lines@data,match.ID = FALSE)
+    raster::crs(final_lines) <- raster::crs(lines)
+    return(final_lines)
+}

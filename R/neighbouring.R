@@ -48,7 +48,7 @@ utils::globalVariables(c("origin", "fid"))
 #' @param mindist The minimum distance between two different observations.
 #' It is important for it to be different from 0 when a W style is used.
 #' @param direction Indicate a field giving information about authorized
-#' traveling direction on lines. if NULL, then all lines can be used in both
+#' travelling direction on lines. if NULL, then all lines can be used in both
 #' directions. Must be the name of a column otherwise. The values of the
 #' column must be "FT" (From - To), "TF" (To - From) or "Both".
 #' @param matrice_type The type of the weighting scheme. Can be 'B' for Binary,
@@ -78,18 +78,18 @@ network_listw_worker<-function(points,lines,maxdistance,dist_func, direction=NUL
 
     if(verbose){
         print("adding the points as vertices to nearest lines")
-        new_lines <- add_vertices_lines(lines, points, joined$worker_id, 1)
-    }else{
-        invisible(capture.output(
-            new_lines <- add_vertices_lines(lines, points,joined$worker_id, tol)
-            ))
     }
+    # in the previous version, we split all the lines at their vertex
+    # however, this is not required here, we could just split them
+    # at points added in the network
+    # new_lines <- add_vertices_lines(lines, points, joined$worker_id, 1)
+    graph_lines <- split_lines_at_vertex(lines, points, joined$worker_id, 1)
 
     ## step2 : splitting the lines on vertices and adjusting weights
     if(verbose){
         print("splitting the lines for the network")
     }
-    graph_lines <- simple_lines(new_lines)
+    #graph_lines <- simple_lines(new_lines)
     graph_lines$lx_length <- gLength(graph_lines,byid = TRUE)
     graph_lines$lx_weight <- (graph_lines$lx_length / graph_lines$line_length) * graph_lines$line_weight
 
@@ -101,10 +101,10 @@ network_listw_worker<-function(points,lines,maxdistance,dist_func, direction=NUL
         result_graph <- build_graph(graph_lines, digits = digits,
                                     attrs = TRUE, line_weight = "lx_weight")
     }else{
-        dir <- ifelse(graph_lines[[direction]]=="Both",0,1)
+        #dir <- ifelse(graph_lines[[direction]]=="Both",0,1)
         result_graph <- build_graph_directed(graph_lines, digits = digits,
-                                    attrs = TRUE, line_weight='line_weight',
-                                    direction = dir)
+                                    attrs = TRUE, line_weight='lx_weight',
+                                    direction = direction)
     }
     ## step4 finding for each point its corresponding vertex
     points$vertex <- closest_points(points,result_graph$spvertices)
@@ -208,7 +208,7 @@ prepare_elements_netlistw <- function(is,grid,snapped_points,lines,maxdistance){
         if(nrow(start_pts)==0){
             return(NULL)
         }else{
-            start_pts <- snapped_points[snapped_points$fid %in% start_pts$fid,]
+            #start_pts <- snapped_points[snapped_points$fid %in% start_pts$fid,]
             start_pts$pttype <- "start"
             #selecting the endpoints
             ext <- raster::extent(start_pts)
@@ -245,7 +245,7 @@ prepare_elements_netlistw <- function(is,grid,snapped_points,lines,maxdistance){
 #' @param maxdistance The maximum distance between two observations to
 #' consider them as neighbours.
 #' @param method A string indicating how the starting points will be built.
-#' If 'centroid' is used, then the center of lines or polygons is used. If
+#' If 'centroid' is used, then the centre of lines or polygons is used. If
 #' 'pointsalong' is used, then points will be placed along polygons' borders or
 #' along lines as starting and end points. If 'ends' is used (only for lines)
 #' the first and last vertices of lines are used as starting and ending points.
@@ -259,7 +259,7 @@ prepare_elements_netlistw <- function(is,grid,snapped_points,lines,maxdistance){
 #' @param mindist The minimum distance between two different observations.
 #' It is important for it to be different from 0 when a W style is used.
 #' @param direction Indicates a field providing information about authorized
-#' traveling direction on lines. if NULL, then all lines can be used in both
+#' travelling direction on lines. if NULL, then all lines can be used in both
 #' directions. Must be the name of a column otherwise. The values of the
 #' column must be "FT" (From - To), "TF" (To - From) or "Both".
 #' @param dist_func Indicates the function to use to convert the distance
@@ -284,14 +284,14 @@ prepare_elements_netlistw <- function(is,grid,snapped_points,lines,maxdistance){
 #' @importFrom graphics plot
 #' @export
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' networkgpkg <- system.file("extdata", "networks.gpkg",package = "spNetwork", mustWork = TRUE)
 #' mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
 #' listw <- network_listw(mtl_network,mtl_network,maxdistance=500,
 #'         method = "centroid", line_weight = "length",
 #'         dist_func = 'squared inverse', matrice_type='B', grid_shape = c(2,2))
 #' }
-network_listw <- function(origins,lines,maxdistance, method="centroid", point_dist=NULL, snap_dist=Inf, line_weight = "length", mindist=10, direction=NULL, dist_func = "inverse", matrice_type = "B", grid_shape=c(1,1), verbose = FALSE, digits = 3, tol=0.1){
+network_listw <- function(origins,lines, maxdistance, method="centroid", point_dist=NULL, snap_dist=Inf, line_weight = "length", mindist=10, direction=NULL, dist_func = "inverse", matrice_type = "B", grid_shape=c(1,1), verbose = FALSE, digits = 3, tol=0.1){
 
     ## step1 adjusting the weights of the lines
     lines$line_length <- gLength(lines,byid = TRUE)
@@ -304,10 +304,10 @@ network_listw <- function(origins,lines,maxdistance, method="centroid", point_di
         stop("the weights of the lines must be superior to 0")
     }
 
-    ## step2 adjusting the directions of the lines
-    if(is.null(direction) == FALSE){
-        lines <- lines_direction(lines,direction)
-    }
+    ## step2 adjusting the directions of the lines (done now by the graph function)
+    #if(is.null(direction) == FALSE){
+    #    lines <- lines_direction(lines,direction)
+    #}
 
     ## step3  checking the matrix type
     if (matrice_type %in% c("B", "W") == FALSE) {
@@ -353,8 +353,9 @@ network_listw <- function(origins,lines,maxdistance, method="centroid", point_di
     if(verbose){
         print("snapping the points to the lines (only once)")
     }
-    snapped_points <- maptools::snapPointsToLines(centers,lines,maxDist = snap_dist, idField="tmpid")
-    snapped_points <- cbind(snapped_points, centers)
+    #snapped_points <- maptools::snapPointsToLines(centers,lines,maxDist = snap_dist, idField="tmpid")
+    snapped_points <- snapPointsToLines2(centers,lines, idField="tmpid")
+    #snapped_points <- cbind(snapped_points, centers)
 
     ## step 6 building grid
     grid <- build_grid(grid_shape,list(origins,lines))
@@ -429,7 +430,7 @@ network_listw <- function(origins,lines,maxdistance, method="centroid", point_di
 #' @param maxdistance The maximum distance between two observations to
 #' consider them as neighbours.
 #' @param method A string indicating how the starting points will be built.
-#' If 'centroid' is used, then the center of lines or polygons is used. If
+#' If 'centroid' is used, then the centre of lines or polygons is used. If
 #' 'pointsalong' is used, then points will be placed along polygons' borders or
 #' along lines as starting and end points. If 'ends' is used (only for lines)
 #' the first and last vertices of lines are used as starting and ending points.
@@ -443,7 +444,7 @@ network_listw <- function(origins,lines,maxdistance, method="centroid", point_di
 #' @param mindist The minimum distance between two different observations.
 #' It is important for it to be different from 0 when a W style is used.
 #' @param direction Indicates a field giving information about authorized
-#' traveling direction on lines. if NULL, then all lines can be used in both
+#' travelling direction on lines. if NULL, then all lines can be used in both
 #' directions. Must be the name of a column otherwise. The values of the
 #' column must be "FT" (From - To), "TF" (To - From) or "Both".
 #' @param dist_func Indicates the function to use to convert the distance
@@ -467,7 +468,7 @@ network_listw <- function(origins,lines,maxdistance, method="centroid", point_di
 #' @importFrom rgeos gCentroid gLength gBuffer gIntersects gPointOnSurface
 #' @export
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
 #' mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
 #' future::plan(future::multisession(workers=2))
@@ -539,8 +540,9 @@ network_listw.mc <- function(origins,lines,maxdistance, method="centroid", point
     if(verbose){
         print("snapping the points to the lines (only once)")
     }
-    snapped_points <- maptools::snapPointsToLines(centers,lines,maxDist = snap_dist, idField="tmpid")
-    snapped_points <- cbind(snapped_points, centers)
+    #snapped_points <- maptools::snapPointsToLines(centers,lines,maxDist = snap_dist, idField="tmpid")
+    snapped_points <- snapPointsToLines2(centers,lines, idField="tmpid")
+    #snapped_points <- cbind(snapped_points, centers)
 
     ##building grid
     grid <- build_grid(grid_shape,list(origins,lines))
@@ -549,7 +551,6 @@ network_listw.mc <- function(origins,lines,maxdistance, method="centroid", point
         print("starting the network part")
     }
 
-    #
     all_is <- 1:length(grid)
     iseq <- list()
     cnt <- 0

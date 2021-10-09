@@ -15,9 +15,13 @@ closest_points(origins, targets)
 for each origin point, the index of the nearest target point
 }
 \description{
-build a quadtree index and solve the nearest neighbour problem for two
-SpatialPointsDataFrame.
+Solve the nearest neighbour problem for two SpatialPointsDataFrame.
+This is a simple wrap-up of the FNN::knnx.index function
 }
 \examples{
 #This is an internal function, no example provided
+eventsgpkg <- system.file("extdata", "events.gpkg", package = "spNetwork", mustWork = TRUE)
+mtl_libraries <- rgdal::readOGR(eventsgpkg,layer="mtl_libraries", verbose=FALSE)
+mtl_theatres <- rgdal::readOGR(eventsgpkg,layer="mtl_theatres", verbose=FALSE)
+close_libs <- closest_points(mtl_theatres, mtl_libraries)
 }

@@ -4,7 +4,7 @@
 \alias{lixelize_lines}
 \title{Cut lines into lixels}
 \usage{
-lixelize_lines(lines, lx_length, mindist = NULL, verbose = FALSE)
+lixelize_lines(lines, lx_length, mindist = NULL)
 }
 \arguments{
 \item{lines}{The SpatialLinesDataframe to modify}
@@ -15,18 +15,16 @@ lixelize_lines(lines, lx_length, mindist = NULL, verbose = FALSE)
 final lixel is shorter than the minimum distance, then it is added to the
 previous lixel. if NULL, then mindist = maxdist/10. Note that the segments
 that are already shorter than the minimum distance are not modified.}
-
-\item{verbose}{A Boolean indicating if a progress bar should be displayed}
 }
 \value{
 An object of class SpatialLinesDataFrame (package sp)
 }
 \description{
 Cut a SpatialLines object into lixels with a specified minimal
-  distance may fail if the lines geometries are self intersecting.
+  distance may fail if the line geometries are self intersecting.
 }
 \examples{
-\dontrun{
+\donttest{
 networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
 mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
 lixels <- lixelize_lines(mtl_network,150,50)

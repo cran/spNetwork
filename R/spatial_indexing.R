@@ -12,6 +12,7 @@
 #' @return quadtree object from package SearchTrees
 #' @examples
 #' #This is an internal function, no example provided
+#' @keywords internal
 build_quadtree <- function(data){
   #step1 : extracting the bbox of the geometrie
   if(class(data)=="SpatialLinesDataFrame"){
@@ -45,6 +46,7 @@ build_quadtree <- function(data){
 #' @param tree a tree object from package SearchTrees
 #' @param data the original data used to build the tree object
 #' @return a subset of data, intersecting geometry
+#' @keywords internal
 #' @examples
 #' #This is an internal function, no example provided
 spatial_request <- function(geometry,tree,data){
@@ -62,29 +64,31 @@ spatial_request <- function(geometry,tree,data){
 
 #' @title Find closest points
 #'
-#' @description build a quadtree index and solve the nearest neighbour problem for two
-#' SpatialPointsDataFrame.
+#' @description Solve the nearest neighbour problem for two SpatialPointsDataFrame.
+#' This is a simple wrap-up of the FNN::knnx.index function
 #'
 #' @param origins a SpatialPointsDataFrame
 #' @param targets a SpatialPointsDataFrame
 #' @return for each origin point, the index of the nearest target point
+#' @export
 #' @examples
 #' #This is an internal function, no example provided
+#' eventsgpkg <- system.file("extdata", "events.gpkg", package = "spNetwork", mustWork = TRUE)
+#' mtl_libraries <- rgdal::readOGR(eventsgpkg,layer="mtl_libraries", verbose=FALSE)
+#' mtl_theatres <- rgdal::readOGR(eventsgpkg,layer="mtl_theatres", verbose=FALSE)
+#' close_libs <- closest_points(mtl_theatres, mtl_libraries)
 closest_points <- function(origins, targets){
-  ## step1 : create the spatial index for the target points
-  original_coords <- sp::coordinates(targets)
-  original_coords <- cbind(original_coords,1:nrow(targets))
-  tree <- SearchTrees::createTree(original_coords[,1:2],dataType = "point")
-  ## step2 : performe the spatial request
-  pts <- sp::coordinates(origins)
-  k1 <- SearchTrees::knnLookup(tree,newdat=pts,k = 1)
-  extract <- original_coords[k1,]
-  if(nrow(origins)==1){
-    idx <- extract[3]
-  }else{
-    idx <- extract[,3]
-  }
 
-  return(idx)
+  xy_origins <- sp::coordinates(origins)
+  xy_targets <- sp::coordinates(targets)
+
+  idx <- FNN::knnx.index(data = xy_targets,
+                         query = xy_origins,
+                         k = 1)
+
+  return(idx[,1])
 }
+
+
+
 

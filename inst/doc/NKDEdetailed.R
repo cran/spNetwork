@@ -7,227 +7,166 @@ backup_option <- options()
 base_wd <- getwd()
 
 ## ----message=FALSE, warning=FALSE, fig.height = 3, fig.width  = 3-------------
+options(rgl.useNULL=TRUE)
 library(spNetwork)
 library(rgeos)
 library(sp)
 library(maptools)
+library(rgl)
+library(FNN)
 
-# start with de definition of some lines
+# we define a set of lines
 wkt_lines <- c(
-  "LINESTRING (0.0 0.0, 5.0 0.0)",
-  "LINESTRING (0.0 -5.0, 5.0 -5.0)",
-  "LINESTRING (5.0 0.0, 5.0 5.0)",
-  "LINESTRING (5.0 -5.0, 5.0 -10.0)",
-  "LINESTRING (5.0 0.0, 5.0 -5.0)",
-  "LINESTRING (5.0 0.0, 10.0 0.0)",
-  "LINESTRING (5.0 -5.0, 10.0 -5.0)",
-  "LINESTRING (10.0 0, 10.0 -5.0)",
-  "LINESTRING (10.0 -10.0, 10.0 -5.0)",
-  "LINESTRING (15.0 -5.0, 10.0 -5.0)",
-  "LINESTRING (10.0 0.0, 15.0 0.0)",
-  "LINESTRING (10.0 0.0, 10.0 5.0)")
+    "LINESTRING (0 0, 1 0)", "LINESTRING (1 0, 2 0)", "LINESTRING (2 0, 3 0)",
+    "LINESTRING (0 1, 1 1)", "LINESTRING (1 1, 2 1)", "LINESTRING (2 1, 3 1)",
+    "LINESTRING (0 2, 1 2)", "LINESTRING (1 2, 2 2)", "LINESTRING (2 2, 3 2)",
+    "LINESTRING (0 3, 1 3)", "LINESTRING (1 3, 2 3)", "LINESTRING (2 3, 3 3)",
+    "LINESTRING (0 0, 0 1)", "LINESTRING (0 1, 0 2)", "LINESTRING (0 2, 0 3)",
+    "LINESTRING (1 0, 1 1)", "LINESTRING (1 1, 1 2)", "LINESTRING (1 2, 1 3)",
+    "LINESTRING (2 0, 2 1)", "LINESTRING (2 1, 2 2)", "LINESTRING (2 2, 2 3)",
+    "LINESTRING (3 0, 3 1)", "LINESTRING (3 1, 3 2)", "LINESTRING (3 2, 3 3)"
+    )
 
+# and create a spatial lines dataframe
 linesdf <- data.frame(wkt = wkt_lines,
                       id = paste("l",1:length(wkt_lines),sep=""))
 
 geoms <- do.call(rbind,lapply(1:nrow(linesdf),function(i){
-      txt <- as.character(linesdf[i,]$wkt)
-      geom <- rgeos::readWKT(txt,id=i)
-      return(geom)
-    }))
+  txt <- as.character(linesdf[i,]$wkt)
+  geom <- rgeos::readWKT(txt,id=i)
+  return(geom)
+}))
 
-all_lines <- SpatialLinesDataFrame(geoms, linesdf,match.ID = F)
+all_lines <- sp::SpatialLinesDataFrame(geoms, linesdf,match.ID = F)
 
-# and the definition of one event
-event <- data.frame(x=c(5),
-                    y=c(-2.5))
-coordinates(event) <- cbind(event$x,event$y)
+# we define now one event
+event <- data.frame(x=c(1),
+                    y=c(1.5))
+sp::coordinates(event) <- cbind(event$x,event$y)
 
 # and map the situation
 par(mar=c(0.1,0.1,0.1,0.1))
 sp::plot(all_lines)
 sp::plot(event,add=T,col="red",pch = 19)
 
+## ----message=FALSE, warning=FALSE, echo = FALSE-------------------------------
+d3_plot_situation <- function(lines, events, pt_samples, densities, scales){
+  
+  open3d(scale=scales)
+  
+  densities < round(densities,7)
+  
+  ## finding for each event its closest samples
+  XY1 <- coordinates(pt_samples)
+  XY2 <- coordinates(events)
+  idx <- knnx.index(XY1, query = XY2, k = 1)
+  
+  events$dens <- densities[idx]
+  events$x <- XY2[,1]
+  events$y <- XY2[,2]
+  eidx <- do.call(c,lapply(1:nrow(events), function(i){c(i,i)}))
+  vert_lines <- events@data[eidx,]
+  vert_lines$dens <- ifelse(1:nrow(vert_lines)%%2 == 0, vert_lines$dens,0)
+  
+  
+  ## plotting the situation
+  line_coords <- do.call(rbind,unlist(coordinates(lines), recursive = FALSE))
+  sample_coords <- coordinates(pt_samples)
+  
+  segments3d(x=line_coords[,1],
+             y=line_coords[,2],
+             z=rep(0, nrow(line_coords)))
+  
+  segments3d(x=vert_lines$x,
+             y=vert_lines$y,
+             z=vert_lines$dens,
+             col = "red")
+  
+  coords_events <- coordinates(events)
+  
+  points3d(
+    x = coords_events[,1],
+    y = coords_events[,2],
+    z = rep(0,nrow(event)),
+    col = "red",
+    size = 5
+  )
+  
+  points3d(
+    x = sample_coords[,1],
+    y = sample_coords[,2],
+    z = densities,
+    col = "blue"
+  )
+  
+  axes3d()
+  title3d(xlab="X",ylab="Y",zlab="Z")
+}
+
+knitr::knit_hooks$set(webgl = hook_webgl)
+
 ## ----message=FALSE, warning=FALSE---------------------------------------------
 samples_pts <- lines_points_along(all_lines,0.01)
 
 simple_kernel <- nkde(all_lines, event, w = 1,
                   samples = samples_pts, kernel_name = "quartic", 
-                  bw = 10, method = "simple", div = "bw", 
+                  bw = 2, method = "simple", div = "bw", 
                   digits = 3, tol = 0.001, grid_shape = c(1,1),
                   check = FALSE,
                   verbose = FALSE)
 
-## ----message=FALSE, warning=FALSE, dev='png', dpi=300, out.width = "50%"------
-library(plot3D)
-
-zfactor <- 1000
-
-par(mar=c(0.1,0.1,0.1,0.1))
-
-# step1 : plot the lines
-lines_coords <- coordinates(all_lines)
-x0 <- c()
-y0 <- c()
-x1 <- c()
-y1 <- c()
-for(i in 1:length(lines_coords)){
-  ci <- lines_coords[[i]][[1]]
-  x0 <- c(x0,ci[1,1])
-  y0 <- c(y0,ci[1,2])
-  x1 <- c(x1,ci[2,1])
-  y1 <- c(y1,ci[2,2])
-}
-z0 <- rep(0,length(x0))
-z1 <- rep(0,length(x1))
-segments3D(x0,y0,z0,x1,y1,z1,
-           zlim = c(0,20),
-           phi = 15,
-           theta = 30,
-           axes = FALSE,
-           border = NA,
-           box = FALSE,
-           r = 0
-           )
-
-# step2 : add the event
-coords_events <- coordinates(event)
-scatter3D(x = coords_events[,1],
-          y = coords_events[,2],
-          z = rep(0,nrow(event)),
-          col="red",
-          add=T, pch = 19)
-
-# step3 : add the samples
-coords_samples <- coordinates(samples_pts)
-scatter3D(x = coords_samples[,1],
-          y = coords_samples[,2],
-          z = simple_kernel * zfactor,
-          col="blue",
-          cex=0.1,
-          pch = 19,
-          add=T)
+## ----test-rgl, message=FALSE, warning=FALSE, webgl = TRUE, out.width= "75%"----
+d3_plot_situation(all_lines, event, samples_pts, simple_kernel, scales = c(1,1,3))
 
 ## ----message=FALSE, warning=FALSE---------------------------------------------
-
 discontinuous_kernel <- nkde(all_lines, event, w = 1,
-                  samples = samples_pts, kernel_name = "quartic", 
-                  bw = 10, method = "discontinuous", div = "bw", 
+                  samples = samples_pts, kernel_name = "quartic",
+                  bw = 2, method = "discontinuous", div = "bw",
                   digits = 3, tol = 0.001, grid_shape = c(1,1),
                   check = FALSE,
                   verbose = FALSE)
 
-## ----echo=FALSE, message=FALSE, warning=FALSE, dev='png', dpi=300, out.width = "50%"----
-library(plot3D)
-
-zfactor <- 1000
-a1 <- 1
-a2 <- 0
-
-par(mar=c(0.1,0.1,0.1,0.1))
-
-##step1 : plot the lines
-lines_coords <- coordinates(all_lines)
-x0 <- c()
-y0 <- c()
-x1 <- c()
-y1 <- c()
-for(i in 1:length(lines_coords)){
-  ci <- lines_coords[[i]][[1]]
-  x0 <- c(x0,ci[1,1])
-  y0 <- c(y0,ci[1,2])
-  x1 <- c(x1,ci[2,1])
-  y1 <- c(y1,ci[2,2])
-}
-z0 <- rep(0,length(x0))
-z1 <- rep(0,length(x1))
-segments3D(x0,y0,z0,x1,y1,z1,
-           zlim = c(0,15),
-           phi = 15,
-           theta = 30,
-           axes = FALSE,
-           border = NA,
-           box = FALSE,
-           r = 0
-           )
-
-##step2 : add the event
-coords_events <- coordinates(event)
-scatter3D(x = coords_events[,1],
-          y = coords_events[,2],
-          z = rep(0,nrow(event)),
-          col="red",
-          add=T, pch = 19)
-
-##step3 : add the samples
-coords_samples <- coordinates(samples_pts)
-scatter3D(x = coords_samples[,1],
-          y = coords_samples[,2],
-          z = discontinuous_kernel * zfactor,
-          col="blue",
-          cex=0.1,
-          pch = 19,
-          add=T)
+## ----test-rgl2, message=FALSE, warning=FALSE, webgl = TRUE, out.width= "75%"----
+d3_plot_situation(all_lines, event, samples_pts, discontinuous_kernel, scales = c(1,1,3))
 
 ## ----message=FALSE, warning=FALSE---------------------------------------------
-samples_pts <- lines_points_along(all_lines,0.1)
-
 continuous_kernel <- nkde(all_lines, event, w = 1,
-                  samples = samples_pts, kernel_name = "quartic", 
-                  bw = 10, method = "continuous", div = "bw", 
-                  digits = 0, tol = 0.01, grid_shape = c(1,1),
+                  samples = samples_pts, kernel_name = "quartic",
+                  bw = 2, method = "continuous", div = "bw",
+                  digits = 3, tol = 0.001, grid_shape = c(1,1),
                   check = FALSE,
-                  verbose = FALSE, max_depth = 15)
+                  verbose = FALSE)
 
-## ----echo=FALSE, message=FALSE, warning=FALSE, dev='png', dpi=300, out.width = "50%"----
-library(plot3D)
+## ----test-rgl3, message=FALSE, warning=FALSE, webgl = TRUE, out.width= "75%"----
+d3_plot_situation(all_lines, event, samples_pts, continuous_kernel, scales = c(1,1,3))
 
-zfactor <- 1000
+## ----message=FALSE, warning=FALSE---------------------------------------------
 
-par(mar=c(0.1,0.1,0.1,0.1))
+# we define now two events
+events <- data.frame(x=c(1,2),
+                    y=c(1.5,1.5))
+sp::coordinates(events) <- cbind(events$x,events$y)
 
-##step1 : plot the lines
-lines_coords <- coordinates(all_lines)
-x0 <- c()
-y0 <- c()
-x1 <- c()
-y1 <- c()
-for(i in 1:length(lines_coords)){
-  ci <- lines_coords[[i]][[1]]
-  x0 <- c(x0,ci[1,1])
-  y0 <- c(y0,ci[1,2])
-  x1 <- c(x1,ci[2,1])
-  y1 <- c(y1,ci[2,2])
-}
-z0 <- rep(0,length(x0))
-z1 <- rep(0,length(x1))
-segments3D(x0,y0,z0,x1,y1,z1,
-           zlim = c(0,15),
-           phi = 15,
-           theta = 30,
-           axes = FALSE,
-           border = NA,
-           box = FALSE,
-           r = 0
-           )
+continuous_kernel <- nkde(all_lines, events, w = 1,
+                  samples = samples_pts, kernel_name = "quartic",
+                  bw = 1.3, method = "continuous", div = "bw",
+                  digits = 3, tol = 0.001, grid_shape = c(1,1),
+                  check = FALSE,
+                  verbose = FALSE)
 
-##step2 : add the event
-coords_events <- coordinates(event)
-scatter3D(x = coords_events[,1],
-          y = coords_events[,2],
-          z = rep(0,nrow(event)),
-          col="red",
-          add=T, pch = 19)
+## ----test-rgl4, message=FALSE, warning=FALSE, webgl = TRUE, out.width= "75%"----
+d3_plot_situation(all_lines, events, samples_pts, continuous_kernel, scales = c(1,1,3))
 
-##step3 : add the samples
-coords_samples <- coordinates(samples_pts)
-scatter3D(x = coords_samples[,1],
-          y = coords_samples[,2],
-          z = continuous_kernel * zfactor,
-          col="blue",
-          cex=0.1,
-          pch = 19,
-          add=T)
+## ----test-rgl5, message=FALSE, warning=FALSE, webgl = TRUE, out.width= "75%"----
+
+continuous_kernel <- nkde(all_lines, events, w = 1,
+                  samples = samples_pts, kernel_name = "quartic",
+                  bw = 1.6, method = "continuous", div = "bw",
+                  digits = 3, tol = 0.001, grid_shape = c(1,1),
+                  check = FALSE,
+                  verbose = FALSE)
+
+d3_plot_situation(all_lines, events, samples_pts, continuous_kernel, scales = c(1,1,3))
 
 ## ----include = FALSE----------------------------------------------------------
 # reset all the user parameters

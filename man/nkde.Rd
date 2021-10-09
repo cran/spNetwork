@@ -28,12 +28,12 @@ nkde(
 )
 }
 \arguments{
-\item{lines}{A SpatialLinesDataFrame with the sampling points. The
+\item{lines}{A SpatialLinesDataFrame representing the underlying network. The
 geometries must be a SpatialLinesDataFrame (may crash if some geometries
- are invalid)}
+ are invalid) without MultiLineSring.}
 
-\item{events}{A SpatialPointsDataFrame representing the events on the
-network. The points will be snapped on the network.}
+\item{events}{events A SpatialPointsDataFrame representing the events on the
+network. The points will be snapped on the network to their closest line.}
 
 \item{w}{A vector representing the weight of each event}
 
@@ -41,10 +41,9 @@ network. The points will be snapped on the network.}
 which the densities will be estimated.}
 
 \item{kernel_name}{The name of the kernel to use. Must be one of triangle,
-gaussian, scaled gaussian, tricube, cosine ,triweight, quartic,
-epanechnikov or uniform.}
+gaussian, tricube, cosine ,triweight, quartic, epanechnikov or uniform.}
 
-\item{bw}{The kernel bandwidth (in meters)}
+\item{bw}{The kernel bandwidth (using the scale of the lines)}
 
 \item{adaptive}{A Boolean, indicating if an adaptive bandwidth must be
 used}
@@ -53,7 +52,7 @@ used}
 bandwidth}
 
 \item{method}{The method to use when calculating the NKDE, must be one of
-simple / discontinuous / continuous (see details for more information)}
+simple / discontinuous / continuous (see nkde details for more information)}
 
 \item{div}{The divisor to use for the kernel. Must be "n" (the number of
 events within the radius around each sampling point), "bw" (the bandwith)
@@ -70,33 +69,39 @@ calculation time and memory use can go wild  if the network has many
 small edges (area with many of intersections and many events). To
 avoid it, it is possible to set here a maximum depth. Considering that the
 kernel is divided at intersections, a value of 10 should yield good
-estimates in most cases. A larger value can be used without problem for the
+estimates in most cases. A larger value can be used without a problem for the
 discontinuous method. For the continuous method, a larger value will
 strongly impact calculation speed.}
 
-\item{digits}{The number of digits to retain in the spatial coordinates. It
-ensures that topology is good when building the network. Default is 3}
+\item{digits}{The number of digits to retain from the spatial coordinates. It
+ensures that topology is good when building the network. Default is 3. Too high a
+precision (high number of digits) might break some connections}
 
-\item{tol}{When adding the events and the sampling points to the network,
-the minimum distance between these points and the lines' extremities. When
-points are closer, they are added at the extremity of the lines.}
+\item{tol}{A float indicating the minimum distance between the events and the
+lines' extremities when adding the point to the network. When points are
+closer, they are added at the extremity of the lines.}
 
-\item{agg}{A double indicating if the events must be aggregated within a distance.
-If NULL, the events are aggregated by rounding the coordinates.}
+\item{agg}{A double indicating if the events must be aggregated within a
+distance. If NULL, the events are aggregated only by rounding the
+coordinates.}
 
-\item{sparse}{A Boolean indicating if sparse or regular matrix should be
-used by the Rcpp functions. Regular matrix are faster, but require more
-memory and could lead to error, in particular with multiprocessing. Sparse
-matrix are slower, but require much less memory.}
+\item{sparse}{A Boolean indicating if sparse or regular matrices should be
+used by the Rcpp functions. These matrices are used to store edge indices
+between two nodes in a graph. Regular matrices are faster, but require more
+memory, in particular with multiprocessing. Sparse matrices are slower (a
+bit), but require much less memory.}
 
 \item{grid_shape}{A vector of two values indicating how the study area
-must be split when performing the calculus (see details). Default is c(1,1)}
+must be split when performing the calculus. Default is c(1,1) (no split). A finer grid could
+reduce memory usage and increase speed when a large dataset is used. When using
+multiprocessing, the work in each grid is dispatched between the workers.}
 
 \item{verbose}{A Boolean, indicating if the function should print messages
-about process.}
+about the process.}
 
 \item{check}{A Boolean indicating if the geometry checks must be run before
-calculating the densities}
+the operation. This might take some times, but it will ensure that the CRS
+of the provided objects are valid and identical, and that geometries are valid.}
 }
 \value{
 A vector of values, they are the density estimates at samplings
@@ -109,19 +114,19 @@ sampling points, and events
 \details{
 **The three NKDE methods**\cr
 Estimating the density of a point process is commonly done by using an
-ordinary two dimensional kernel density function. However, there are
-numerous cases for which the events do not occur in a two dimensional
+ordinary two-dimensional kernel density function. However, there are
+numerous cases for which the events do not occur in a two-dimensional
 space but on a network (like car crashes, outdoor crimes, leaks in pipelines,
 etc.). New methods were developed to adapt the methodology to networks,
 three of them are available in this package.
 \itemize{
-  \item{method="simple"}{This first method was presented by Xie et al.
-  (2008) and proposes an intuitive solution. The distances between events
+  \item{method="simple"}{This first method was presented by \insertCite{xie2008kernel}{spNetwork}
+  and proposes an intuitive solution. The distances between events
   and sampling points are replaced by network distances, and the formula of
   the kernel is adapted to calculate the density over a linear unit
   instead of an areal unit.}
   \item{method="discontinuous"}{The previous method has been criticized by
-  Okabe et al (2008), arguing that the estimator proposed is biased,
+  \insertCite{okabe2009kernel}{spNetwork}, arguing that the estimator proposed is biased,
   leading to an overestimation of density in events hot-spots. More
   specifically, the simple method does not conserve mass and the induced
   kernel is not a probability density along the network. They thus
@@ -129,8 +134,8 @@ three of them are available in this package.
   equally "divides" the mass density of an event at intersections}
   \item{method="continuous"}{If the discontinuous method is unbiased, it
   leads to a discontinuous kernel function which is a bit counter-intuitive.
-  Okabe et al (2008) proposed another version of the kernel, that divide
-  the mass of the density at intersection but adjusts the density before the
+  \insertCite{okabe2009kernel;textual}{spNetwork} proposed another version of the kernel, that divides
+  the mass of the density at intersections but adjusts the density before the
   intersection to make the function continuous.}
 }
 The three methods are available because, even though that the simple
@@ -140,9 +145,9 @@ function as used in Geographically Weighted Regression.\cr
 \cr\cr
 **adaptive bandwidth**\cr
 It is possible to use adaptive bandwidth instead of fixed bandwidth.
-Adaptive bandwidths are calculated using the Abramson’s smoothing regimen.
+Adaptive bandwidths are calculated using the Abramson’s smoothing regimen \insertCite{abramson1982bandwidth}{spNetwork}.
 To do so, an original fixed bandwidth must be specified (bw parameter), and
-is used to estimate priory densities at event locations. These densities
+is used to estimate the priory densitiy at event locations. These densities
 are then used to calculate local bandwidth. The maximum size of the local
 bandwidth can be limited with the parameter trim_bw. For more details, see
 the vignettes.
@@ -170,7 +175,7 @@ the lines if they are close to them. This is controlled by the parameter tol.
 In the same way, it is possible to limit the number of vertices by
 aggregating the events that are close to each other. In that case, the
 weights of the aggregated events are summed. According to an aggregation
-distance, a buffer is drawn around the fist event, each other event falling
+distance, a buffer is drawn around the fist event, all events falling
 in that buffer are aggregated to the first event, forming a new event. The
 coordinates of this new event are the mean of the original events
 coordinates. This procedure is repeated until no events are aggregated. The
@@ -194,7 +199,7 @@ then a classical matrix could be used instead of a sparse one. It
 significantly increases speed, but could lead to memory issues.
 }
 \examples{
-\dontrun{
+\donttest{
 networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
 eventsgpkg <- system.file("extdata", "events.gpkg", package = "spNetwork", mustWork = TRUE)
 mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
@@ -212,5 +217,10 @@ densities <- nkde(mtl_network,
                   agg = 15,
                   grid_shape = c(1,1),
                   verbose=FALSE)
+}
+}
+\references{
+{
+    \insertAllCited{}
 }
 }

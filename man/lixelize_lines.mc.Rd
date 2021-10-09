@@ -31,11 +31,11 @@ An object of class SpatialLinesDataFrame (package sp)
 }
 \description{
 Cut a SpatialLines object into lixels with a specified minimal
- distance may fail if the lines geometries are self intersecting with
+ distance may fail if the line geometries are self intersecting with
  multicore support.
 }
 \examples{
-\dontrun{
+\donttest{
 networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
 mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
 future::plan(future::multisession(workers=2))

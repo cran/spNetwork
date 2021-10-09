@@ -1,3 +1,5 @@
+#' @importFrom Rdpack reprompt
+
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #### helper functions ####
 # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -16,7 +18,7 @@
 #' @keywords internal
 #' @examples
 #' #This is an internal function, no example provided
-check_geometries <- function(lines,samples,events, study_area){
+check_geometries <- function(lines,samples,events, study_area){ # nocov start
 
   # checking if geometries are all valid, simple and planar
   obj_names <- c("lines","samples","events")
@@ -25,7 +27,8 @@ check_geometries <- function(lines,samples,events, study_area){
     obj <- objs[[i]]
     obj_name <- obj_names[[i]]
     if(any(gIsSimple(obj,byid = TRUE)==FALSE)){
-      stop(paste("the ",obj_name," must be simple geometries",sep=""))
+      stop(paste("the ",obj_name," must be simple geometries,
+                 considere using the function sp::disaggregate",sep=""))
     }
     if(any(gIsValid(obj,byid = TRUE)==FALSE)){
       stop(paste("the ",obj_name," must be valid geometries",sep=""))
@@ -66,7 +69,7 @@ check_geometries <- function(lines,samples,events, study_area){
 }
 
 #defining some global variables (weird felx but ok)
-utils::globalVariables(c("spid", "weight", "."))
+utils::globalVariables(c("spid", "weight", ".")) # nocov end
 
 
 #' @title Clean events geometries
@@ -76,7 +79,7 @@ utils::globalVariables(c("spid", "weight", "."))
 #' @param events The SpatialPointsDataFrame to contract (must have a weight column)
 #' @param digits The number of digits to keep
 #' @param agg A double indicating if the points must be aggregated within a distance.
-#' if NULL, then the points are aggregated by rouding the coordinates.
+#' if NULL, then the points are aggregated by rounding the coordinates.
 #' @return A new SpatialPointsDataFrame
 #' @importFrom data.table tstrsplit setDF
 #' @keywords internal
@@ -108,14 +111,25 @@ clean_events <- function(events,digits=5,agg=NULL){
 #'
 #' @description Function to aggregate points within a radius.
 #'
+#' @details This function can be used to aggregate points within a radius. This
+#'   is done by iterating over the features. For each feature, all the features
+#'   in the radius are found and merged (mean of coordinates). This process is
+#'   repeated until no more modification is applied.
+#'
 #' @param points The SpatialPointsDataFrame to contract (must have a weight column)
 #' @param maxdist The distance to use
+#' @param weight The name of the column to use as weight (default is "weight").
+#' The values of the aggregated points for this column will be summed. For all
+#' the other columns, only the first value is retained.
 #' @return A new SpatialPointsDataFrame
 #' @importFrom rgeos gBuffer
-#' @keywords internal
+#' @export
 #' @examples
-#' #This is an internal function, no example provided
-aggregate_points <- function(points, maxdist){
+#' eventsgpkg <- system.file("extdata", "events.gpkg", package = "spNetwork", mustWork = TRUE)
+#' bike_accidents <- rgdal::readOGR(eventsgpkg,layer="bike_accidents", verbose=FALSE)
+#' bike_accidents$weight <- 1
+#' agg_points <- aggregate_points(bike_accidents, 5)
+aggregate_points <- function(points, maxdist, weight = "weight"){
   Continue <- TRUE
   while(Continue){
     #generer l'arbre
@@ -132,7 +146,7 @@ aggregate_points <- function(points, maxdist){
       if(nrow(ok_cand)>0){
         coords <- sp::coordinates(ok_cand)
         points[ok_cand$oid,"aggregated"] <<- 1
-        new_row <- c(sum(ok_cand$weight),mean(coords[,1]), mean(coords[,2]))
+        new_row <- c(sum(ok_cand[[weight]]),mean(coords[,1]), mean(coords[,2]))
         return(new_row)
       }else{
         return(NULL)
@@ -141,7 +155,7 @@ aggregate_points <- function(points, maxdist){
     #let us remove all the empty quadra
     new_features <- new_features[lengths(new_features) != 0]
     new_points <- data.frame(do.call(rbind,new_features))
-    names(new_points) <- c("weight","x","y")
+    names(new_points) <- c(weight,"x","y")
     sp::coordinates(new_points) <- cbind(new_points$x,new_points$y)
     raster::crs(new_points) <- raster::crs(points)
     if(nrow(new_points) == nrow(points)){
@@ -211,12 +225,14 @@ prepare_data <- function(samples,lines,events, w ,digits,tol, agg){
 #' @param digits The number of digits to keep
 #' @param tol A float indicating the spatial tolerance when snapping events on
 #' lines
+#' @param split_all A boolean indicating if we must split the lines at each vertex
+#' (TRUE) or only at event vertices (FALSE)
 #' @return A list with the split dataset
 #' @importFrom rgeos gBuffer
 #' @keywords internal
 #' @examples
 #' #This is an internal function, no example provided
-split_by_grid <- function(grid,samples,events,lines,bw,tol, digits){
+split_by_grid <- function(grid,samples,events,lines,bw,tol, digits, split_all = TRUE){
 
   ## step1 : creating the spatial trees
   tree_samples <- build_quadtree(samples)
@@ -256,11 +272,18 @@ split_by_grid <- function(grid,samples,events,lines,bw,tol, digits){
       }
       snapped_events <- snapPointsToLines(sel_events,sel_lines,idField = "oid")
       sel_events <- cbind(snapped_events,sel_events)
-      new_lines <- add_vertices_lines(sel_lines,sel_events,sel_events$nearest_line_id,tol)
+      if(split_all){
+        new_lines <- add_vertices_lines(sel_lines,sel_events,sel_events$nearest_line_id,tol)
+      }else{
+        new_lines <- split_lines_at_vertex(sel_lines,sel_events,sel_events$nearest_line_id,tol)
+      }
+
     }
 
     # split lines at events
-    new_lines <- simple_lines(new_lines)
+    if(split_all){
+      new_lines <- simple_lines(new_lines)
+    }
     new_lines$length <- gLength(new_lines,byid = TRUE)
     new_lines <- subset(new_lines,new_lines$length>0)
 
@@ -385,12 +408,14 @@ split_by_grid_abw <- function(grid,events,lines,bw,tol,digits){
 #' @param digits The number of digits to keep
 #' @param tol A float indicating the spatial tolerance when snapping events on
 #' lines
+#' @param split_all A boolean indicating if we must split the lines at each vertex
+#' (TRUE) or only at event vertices (FALSE)
 #' @return A list with the split dataset
 #' @importFrom rgeos gBuffer
 #' @keywords internal
 #' @examples
 #' #This is an internal function, no example provided
-split_by_grid.mc <- function(grid,samples,events,lines,bw,tol,digits){
+split_by_grid.mc <- function(grid,samples,events,lines,bw,tol,digits, split_all = T){
 
   ## step1 creating the spatial trees
   tree_samples <- build_quadtree(samples)
@@ -445,11 +470,18 @@ split_by_grid.mc <- function(grid,samples,events,lines,bw,tol,digits){
       }
       snapped_events <- snapPointsToLines(sel_events,sel_lines,idField = "oid")
       sel_events <- cbind(snapped_events,sel_events)
-      invisible(capture.output(new_lines <- add_vertices_lines(sel_lines,sel_events,sel_events$nearest_line_id,tol)))
+      if(split_all){
+        new_lines <- add_vertices_lines(sel_lines,sel_events,sel_events$nearest_line_id,tol)
+      }else{
+        new_lines <- split_lines_at_vertex(sel_lines,sel_events,sel_events$nearest_line_id,tol)
+      }
+
     }
 
     #split lines at events
-    new_lines <- simple_lines(new_lines)
+    if(split_all){
+      new_lines <- simple_lines(new_lines)
+    }
     new_lines$length <- gLength(new_lines,byid = TRUE)
     new_lines <- subset(new_lines,new_lines$length>0)
 
@@ -757,7 +789,7 @@ adaptive_bw.mc <- function(grid,events,lines,bw,trim_bw,method,kernel_name,max_d
 #' method. For the continuous method, a larger value will strongly impact
 #' calculation speed.
 #' @param verbose A Boolean, indicating if the function should print messages
-#' about process.
+#' about the process.
 #' @importFrom igraph adjacent_vertices get.edge.ids
 #' @return A numeric vector with the nkde values
 #' @keywords internal
@@ -790,7 +822,8 @@ nkde_worker <- function(lines, events, samples, kernel_name,bw, bws, method, div
   if(x >= 2*10^9){
     stop(paste("The matrix size will be exceeded (",a," x ",b,"), please consider using a finer grid to split the study area",sep=""))
   }
-  snapped_samples <- maptools::snapPointsToLines(samples,edges,idField = "edge_id")
+  #snapped_samples <- maptools::snapPointsToLines(samples,edges,idField = "edge_id")
+  snapped_samples <- snapPointsToLines2(samples,edges, snap_dist = bw, idField = "edge_id")
   samples$edge_id <- snapped_samples$nearest_line_id
 
   ## step3 finding for each event, its corresponding node
@@ -886,19 +919,19 @@ nkde_worker <- function(lines, events, samples, kernel_name,bw, bws, method, div
 #' @details
 #' **The three NKDE methods**\cr
 #' Estimating the density of a point process is commonly done by using an
-#' ordinary two dimensional kernel density function. However, there are
-#' numerous cases for which the events do not occur in a two dimensional
+#' ordinary two-dimensional kernel density function. However, there are
+#' numerous cases for which the events do not occur in a two-dimensional
 #' space but on a network (like car crashes, outdoor crimes, leaks in pipelines,
 #' etc.). New methods were developed to adapt the methodology to networks,
 #' three of them are available in this package.
 #' \itemize{
-#'   \item{method="simple"}{This first method was presented by Xie et al.
-#'   (2008) and proposes an intuitive solution. The distances between events
+#'   \item{method="simple"}{This first method was presented by \insertCite{xie2008kernel}{spNetwork}
+#'   and proposes an intuitive solution. The distances between events
 #'   and sampling points are replaced by network distances, and the formula of
 #'   the kernel is adapted to calculate the density over a linear unit
 #'   instead of an areal unit.}
 #'   \item{method="discontinuous"}{The previous method has been criticized by
-#'   Okabe et al (2008), arguing that the estimator proposed is biased,
+#'   \insertCite{okabe2009kernel}{spNetwork}, arguing that the estimator proposed is biased,
 #'   leading to an overestimation of density in events hot-spots. More
 #'   specifically, the simple method does not conserve mass and the induced
 #'   kernel is not a probability density along the network. They thus
@@ -906,8 +939,8 @@ nkde_worker <- function(lines, events, samples, kernel_name,bw, bws, method, div
 #'   equally "divides" the mass density of an event at intersections}
 #'   \item{method="continuous"}{If the discontinuous method is unbiased, it
 #'   leads to a discontinuous kernel function which is a bit counter-intuitive.
-#'   Okabe et al (2008) proposed another version of the kernel, that divide
-#'   the mass of the density at intersection but adjusts the density before the
+#'   \insertCite{okabe2009kernel;textual}{spNetwork} proposed another version of the kernel, that divides
+#'   the mass of the density at intersections but adjusts the density before the
 #'   intersection to make the function continuous.}
 #' }
 #' The three methods are available because, even though that the simple
@@ -917,9 +950,9 @@ nkde_worker <- function(lines, events, samples, kernel_name,bw, bws, method, div
 #' \cr\cr
 #' **adaptive bandwidth**\cr
 #' It is possible to use adaptive bandwidth instead of fixed bandwidth.
-#' Adaptive bandwidths are calculated using the Abramson’s smoothing regimen.
+#' Adaptive bandwidths are calculated using the Abramson’s smoothing regimen \insertCite{abramson1982bandwidth}{spNetwork}.
 #' To do so, an original fixed bandwidth must be specified (bw parameter), and
-#' is used to estimate priory densities at event locations. These densities
+#' is used to estimate the priory densitiy at event locations. These densities
 #' are then used to calculate local bandwidth. The maximum size of the local
 #' bandwidth can be limited with the parameter trim_bw. For more details, see
 #' the vignettes.
@@ -947,7 +980,7 @@ nkde_worker <- function(lines, events, samples, kernel_name,bw, bws, method, div
 #' In the same way, it is possible to limit the number of vertices by
 #' aggregating the events that are close to each other. In that case, the
 #' weights of the aggregated events are summed. According to an aggregation
-#' distance, a buffer is drawn around the fist event, each other event falling
+#' distance, a buffer is drawn around the fist event, all events falling
 #' in that buffer are aggregated to the first event, forming a new event. The
 #' coordinates of this new event are the mean of the original events
 #' coordinates. This procedure is repeated until no events are aggregated. The
@@ -970,61 +1003,25 @@ nkde_worker <- function(lines, events, samples, kernel_name,bw, bws, method, div
 #' then a classical matrix could be used instead of a sparse one. It
 #' significantly increases speed, but could lead to memory issues.
 #'
-#' @param lines A SpatialLinesDataFrame with the sampling points. The
-#' geometries must be a SpatialLinesDataFrame (may crash if some geometries
-#'  are invalid)
-#' @param events A SpatialPointsDataFrame representing the events on the
-#' network. The points will be snapped on the network.
-#' @param w A vector representing the weight of each event
+#' @references{
+#'     \insertAllCited{}
+#' }
+#'
+#' @template nkde_params-arg
 #' @param samples A SpatialPointsDataFrame representing the locations for
 #' which the densities will be estimated.
-#' @param kernel_name The name of the kernel to use. Must be one of triangle,
-#' gaussian, scaled gaussian, tricube, cosine ,triweight, quartic,
-#' epanechnikov or uniform.
-#' @param bw The kernel bandwidth (in meters)
-#' @param adaptive A Boolean, indicating if an adaptive bandwidth must be
-#' used
-#' @param trim_bw A float, indicating the maximum value for the adaptive
-#' bandwidth
-#' @param method The method to use when calculating the NKDE, must be one of
-#' simple / discontinuous / continuous (see details for more information)
-#' @param div The divisor to use for the kernel. Must be "n" (the number of
-#' events within the radius around each sampling point), "bw" (the bandwith)
-#' "none" (the simple sum).
-#' @param diggle_correction A Boolean indicating if the correction factor
-#' for edge effect must be used.
-#' @param study_area A SpatialPolygonsDataFrame or a SpatialPolygon
-#' representing the limits of the study area.
-#' @param max_depth when using the continuous and discontinuous methods, the
-#' calculation time and memory use can go wild  if the network has many
-#' small edges (area with many of intersections and many events). To
-#' avoid it, it is possible to set here a maximum depth. Considering that the
-#' kernel is divided at intersections, a value of 10 should yield good
-#' estimates in most cases. A larger value can be used without problem for the
-#' discontinuous method. For the continuous method, a larger value will
-#' strongly impact calculation speed.
-#' @param digits The number of digits to retain in the spatial coordinates. It
-#' ensures that topology is good when building the network. Default is 3
-#' @param tol When adding the events and the sampling points to the network,
-#' the minimum distance between these points and the lines' extremities. When
-#' points are closer, they are added at the extremity of the lines.
-#' @param agg A double indicating if the events must be aggregated within a distance.
-#' If NULL, the events are aggregated by rounding the coordinates.
-#' @param sparse A Boolean indicating if sparse or regular matrix should be
-#' used by the Rcpp functions. Regular matrix are faster, but require more
-#' memory and could lead to error, in particular with multiprocessing. Sparse
-#' matrix are slower, but require much less memory.
-#' @param grid_shape A vector of two values indicating how the study area
-#' must be split when performing the calculus (see details). Default is c(1,1)
+#' @template nkde_params2-arg
+#' @template nkde_geoms-args
+#' @template sparse-arg
+#' @template grid_shape-arg
 #' @param verbose A Boolean, indicating if the function should print messages
-#' about process.
-#' @param check A Boolean indicating if the geometry checks must be run before
-#' calculating the densities
+#' about the process.
+#' @template check-arg
 #' @return A vector of values, they are the density estimates at samplings
 #' points
 #' @export
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
 #' eventsgpkg <- system.file("extdata", "events.gpkg", package = "spNetwork", mustWork = TRUE)
 #' mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
@@ -1153,62 +1150,25 @@ nkde <- function(lines, events, w, samples, kernel_name, bw, adaptive=FALSE, tri
 #' @title Network Kernel density estimate (multicore)
 #'
 #' @description Calculate the Network Kernel Density Estimate based on a network of lines,
-#' sampling points, and events with multicore support. For details, please see the function nkde
+#' sampling points, and events with multicore support.
 #'
-#' @param lines A SpatialLinesDataFrame with the sampling points. The
-#' geometries must be a SpatialLinesDataFrame (may crash if some geometries
-#'  are invalid)
-#' @param events A SpatialPointsDataFrame representing the events on the
-#' network. The points will be snapped on the network.
-#' @param w A vector representing the weight of each event
+#' @details For more details, see help(nkde)
+#'
+#' @template nkde_params-arg
 #' @param samples A SpatialPointsDataFrame representing the locations for
-#' which the densities will be estimated
-#' @param kernel_name The name of the kernel to use. Must be one of triangle,
-#' gaussian, tricube, cosine ,triweight, quartic, epanechnikov or uniform.
-#' @param bw The kernel bandwidth (in meters)
-#' @param adaptive A Boolean, indicating if an adaptive bandwidth must be
-#' used
-#' @param trim_bw A float, indicating the maximum value for the adaptive
-#' bandwidth
-#' @param method The method to use when calculating the NKDE, must be one of
-#' simple / discontinuous / continuous (see details for more information)
-#' @param div The divisor to use for the kernel. Must be "n" (the number of
-#' events within the radius around each sampling point), "bw" (the bandwith)
-#' "none" (the simple sum).
-#' @param diggle_correction A Boolean indicating if the correction factor
-#' for edge effect must be used.
-#' @param study_area A SpatialPolygonsDataFrame or a SpatialPolygon
-#' representing the limits of the study area.
-#' @param max_depth when using the continuous and discontinuous methods, the
-#' calculation time and memory use can go wild  if the network has many
-#' small edges (area with many of intersections and many events). To
-#' avoid it, it is possible to set here a maximum depth. Considering that the
-#' kernel is divided at intersections, a value of 10 should yield good
-#' estimates in most cases. A larger value can be used without problem for the
-#' discontinuous method. For the continuous method, a larger value will
-#' strongly impact calculation speed.
-#' @param digits The number of digits to retain in the spatial coordinates. It
-#' ensures that topology is good when building the network. Default is 3
-#' @param tol When adding the events and the sampling points to the network,
-#' the minimum distance between these points and the lines' extremities. When
-#' points are closer, they are added at the extremity of the lines.
-#' @param agg A double indicating if the events must be aggregated within a distance.
-#' If NULL, the events are aggregated by rounding the coordinates.
-#' @param sparse A Boolean indicating if sparse or regular matrix should be
-#' used by the Rcpp functions. Regular matrix are faster, but require more
-#' memory and could lead to error, in particular with multiprocessing. Sparse
-#' matrix are slower, but require much less memory.
-#' @param grid_shape A vector of two values indicating how the study area
-#' must be split when performing the calculus (see details). Default is c(1,1)
+#' which the densities will be estimated.
+#' @template nkde_params2-arg
+#' @template nkde_geoms-args
+#' @template sparse-arg
+#' @template grid_shape-arg
 #' @param verbose A Boolean, indicating if the function should print messages
-#' about process.
-#' @param check A Boolean indicating if the geometry checks must be run before
-#' calculating the density.
+#' about the process.
+#' @template check-arg
 #' @return A vector of values, they are the density estimates at sampling
 #' points
 #' @export
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
 #' eventsgpkg <- system.file("extdata", "events.gpkg", package = "spNetwork", mustWork = TRUE)
 #' mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)

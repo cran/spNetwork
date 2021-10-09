@@ -79,6 +79,7 @@ networkgpkg <- system.file("extdata", "networks.gpkg",
                            package = "spNetwork", mustWork = TRUE)
 eventsgpkg <- system.file("extdata", "events.gpkg",
                           package = "spNetwork", mustWork = TRUE)
+
 mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network",verbose = FALSE)
 bike_accidents <- rgdal::readOGR(eventsgpkg,layer="bike_accidents", verbose = FALSE)
 
@@ -104,7 +105,6 @@ samples <- lines_center(lixels)
 #                    sparse = TRUE,
 #                    verbose = FALSE)
 #  
-#  samples$density <- densities
 
 ## ----message=FALSE, warning=FALSE---------------------------------------------
 samples$density <- densities
@@ -170,7 +170,7 @@ ggplot() +
 #                    bw = 300, div= "bw",
 #                    method = "discontinuous", digits = 1, tol = 1,
 #                    grid_shape = c(2,2), # splitting the study area in 4 rectangles
-#                    max_depth = 16,
+#                    max_depth = 8,
 #                    agg = 5, #we aggregate events within a 5m radius
 #                    sparse = TRUE,
 #                    verbose = FALSE)
@@ -204,15 +204,14 @@ print(paste("overall difference between the regular and paralellized method : ",
 ## ----message=FALSE, warning=FALSE---------------------------------------------
 samples$density <- adapt_densities$k
 
+## ----message=FALSE, warning=FALSE---------------------------------------------
+circles <- gBuffer(adapt_densities$events,byid = TRUE,width = adapt_densities$events$bw)
 
-## ----message=FALSE, warning=FALSE, eval = FALSE-------------------------------
-#  circles <- gBuffer(adapt_densities$events,byid = TRUE,width = adapt_densities$events$bw)
-#  
-#  ids <- c(1,52,20,86,14,75,126,200,177)
-#  
-#  plot(mtl_network)
-#  plot(bike_accidents,add=T,col='red',pch = 19,cex=0.5)
-#  plot(circles[ids,],add=T,border='blue',lwd=2)
+ids <- c(1,52,20,86,14,75,126,200,177)
+
+plot(mtl_network)
+plot(bike_accidents,add=T,col='red',pch = 19,cex=0.5)
+plot(circles[ids,],add=T,border='blue',lwd=2)
 
 ## ----echo=FALSE, message=FALSE, warning=FALSE---------------------------------
 # rescaling to help the mapping
@@ -253,7 +252,6 @@ ggplot() +
   labs(title = "bike accident density by kilometres in 2016",
           subtitle = "within a radius of 300 metres (adaptive bandiwdth)",
           caption = "using the quartic kernel")
-  
 
 
 ## ----message=FALSE, warning=FALSE---------------------------------------------
@@ -267,8 +265,8 @@ events <- subset(bike_accidents,events_sel)
 lines_sel <- as.vector(rgeos::gIntersects(mtl_network, study_area,byid=TRUE))
 lines <- subset(mtl_network,lines_sel)
 
-invisible(capture.output(lixels <- lixelize_lines(mtl_network,100,mindist = 50)))
-invisible(capture.output(samples <- lines_center(lixels)))
+lixels <- lixelize_lines(lines,200,mindist = 50)
+samples <- lines_center(lixels)
 
 
 sp::plot(study_area,col="white")
@@ -298,6 +296,8 @@ samples$density <- adjusted_densities
 
 ## ----echo=FALSE, message=FALSE, warning=FALSE---------------------------------
 extent <- sp::bbox(study_area)
+extent[,1] <- extent[,1]-500
+extent[,2] <- extent[,2]+500
 
 # rescaling to help the mapping
 samples$density <- samples$density*1000
@@ -337,8 +337,40 @@ ggplot() +
   xlim(extent[1,])+
   ylim(extent[2,])+
   labs(title = "bike accident density by kilometres in 2016",
-          subtitle = "within a radius of 100 metres")
+          subtitle = "within a radius of 150 metres")
 
+
+## ----eval = FALSE-------------------------------------------------------------
+#  bws_selection_cv <- bw_cv_likelihood_calc(
+#    bw_range = c(200,700),bw_step = 50,
+#    lines = mtl_network, events = bike_accidents,
+#    w = rep(1,nrow(bike_accidents)),
+#    kernel_name = "quartic", method = "discontinuous",
+#    diggle_correction = FALSE, study_area = NULL,
+#    max_depth = 8,
+#    digits=2, tol=0.1, agg=5,
+#    sparse=TRUE, grid_shape=c(1,1),
+#    verbose=FALSE, check=TRUE)
+#  
+#  bws_selection_cvl <- bw_cvl_calc(
+#    bw_range = c(200,700),bw_step = 50,
+#    lines = mtl_network, events = bike_accidents,
+#    w = rep(1,nrow(bike_accidents)),
+#    kernel_name = "quartic", method = "discontinuous",
+#    diggle_correction = FALSE, study_area = NULL,
+#    max_depth = 8,
+#    digits=2, tol=0.1, agg=5,
+#    sparse=TRUE, grid_shape=c(1,1),
+#    verbose=FALSE, check=TRUE)
+#  
+#  cv_values <- data.frame(
+#    "bw" = bws_selection_cv$bw,
+#    "cv_likelihood" = bws_selection_cv$cv_scores,
+#    "cvl_crit" = bws_selection_cvl$cvl_scores
+#  )
+
+## ----echo=FALSE---------------------------------------------------------------
+knitr::kable(cv_values,digits = 2,row.names = FALSE)
 
 ## ----include = FALSE----------------------------------------------------------
 # reset all the user parameters

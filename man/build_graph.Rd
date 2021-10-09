@@ -11,16 +11,15 @@ build_graph(lines, digits, line_weight, attrs = FALSE)
 
 \item{digits}{The number of digits to keep from the coordinates}
 
-\item{line_weight}{The name of a field that represent the cost to use a line}
+\item{line_weight}{The name of the column giving the weight of the lines}
 
-\item{attrs}{A Boolean indicating if the original lines attributes
-must be added to the graph lines}
+\item{attrs}{A boolean indicating if the original lines' attributes should be
+stored in the final object}
 }
 \value{
 A list containing the following elements:
 \itemize{
-        \item graph: an igraph object that preserves the original lines
-        characteristics
+        \item graph: an igraph object
         \item linelist: the dataframe used to build the graph
         \item lines: the original SpatialLinesDataFrame
         \item spvertices: a SpatialPointsDataFrame representing the vertices
@@ -31,7 +30,16 @@ A list containing the following elements:
 \description{
 Generate an igraph object from a SpatialLinesDataFrame.
 }
-\examples{
-#This is an internal function, no example provided
+\details{
+This function can be used to generate an undirected graph object (igraph
+  object). It uses the coordinates of the linestrings extremities to create
+  the nodes of the graph. This is why the number of digits in the coordinates
+  is important. Too high a precision (high number of digits) might break some
+  connections.
 }
-\keyword{internal}
+\examples{
+networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
+mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
+mtl_network$length <- rgeos::gLength(mtl_network, byid = TRUE)
+graph_result <- build_graph(mtl_network, 2, "length", attrs = TRUE)
+}

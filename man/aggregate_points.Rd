@@ -4,12 +4,16 @@
 \alias{aggregate_points}
 \title{Events aggregation}
 \usage{
-aggregate_points(points, maxdist)
+aggregate_points(points, maxdist, weight = "weight")
 }
 \arguments{
 \item{points}{The SpatialPointsDataFrame to contract (must have a weight column)}
 
 \item{maxdist}{The distance to use}
+
+\item{weight}{The name of the column to use as weight (default is "weight").
+The values of the aggregated points for this column will be summed. For all
+the other columns, only the first value is retained.}
 }
 \value{
 A new SpatialPointsDataFrame
@@ -17,7 +21,15 @@ A new SpatialPointsDataFrame
 \description{
 Function to aggregate points within a radius.
 }
-\examples{
-#This is an internal function, no example provided
+\details{
+This function can be used to aggregate points within a radius. This
+  is done by iterating over the features. For each feature, all the features
+  in the radius are found and merged (mean of coordinates). This process is
+  repeated until no more modification is applied.
 }
-\keyword{internal}
+\examples{
+eventsgpkg <- system.file("extdata", "events.gpkg", package = "spNetwork", mustWork = TRUE)
+bike_accidents <- rgdal::readOGR(eventsgpkg,layer="bike_accidents", verbose=FALSE)
+bike_accidents$weight <- 1
+agg_points <- aggregate_points(bike_accidents, 5)
+}

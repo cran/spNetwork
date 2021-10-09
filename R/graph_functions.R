@@ -2,15 +2,20 @@
 #'
 #' @description Generate an igraph object from a SpatialLinesDataFrame.
 #'
+#' @details This function can be used to generate an undirected graph object (igraph
+#'   object). It uses the coordinates of the linestrings extremities to create
+#'   the nodes of the graph. This is why the number of digits in the coordinates
+#'   is important. Too high a precision (high number of digits) might break some
+#'   connections.
+#'
 #' @param lines A SpatialLinesDataFrame
 #' @param digits The number of digits to keep from the coordinates
-#' @param line_weight The name of a field that represent the cost to use a line
-#' @param attrs A Boolean indicating if the original lines attributes
-#' must be added to the graph lines
+#' @param line_weight The name of the column giving the weight of the lines
+#' @param attrs A boolean indicating if the original lines' attributes should be
+#'   stored in the final object
 #' @return A list containing the following elements:
 #' \itemize{
-#'         \item graph: an igraph object that preserves the original lines
-#'         characteristics
+#'         \item graph: an igraph object
 #'         \item linelist: the dataframe used to build the graph
 #'         \item lines: the original SpatialLinesDataFrame
 #'         \item spvertices: a SpatialPointsDataFrame representing the vertices
@@ -19,9 +24,12 @@
 #' }
 #' @importFrom sp coordinates SpatialPoints
 #' @importFrom utils strcapture
-#' @keywords internal
+#' @export
 #' @examples
-#' #This is an internal function, no example provided
+#' networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
+#' mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
+#' mtl_network$length <- rgeos::gLength(mtl_network, byid = TRUE)
+#' graph_result <- build_graph(mtl_network, 2, "length", attrs = TRUE)
 build_graph <- function(lines, digits, line_weight, attrs = FALSE) {
     # extracting lines coordinates lines_coords
     extremites <- lines_extremities(lines)
@@ -87,16 +95,25 @@ build_graph <- function(lines, digits, line_weight, attrs = FALSE) {
 #'
 #' @description Generate a directed igraph object from a SpatialLinesDataFrame.
 #'
+#' @details This function can be used to generate a directed graph object (igraph
+#'   object). It uses the coordinates of the linestrings extremities to create
+#'   the nodes of the graph. This is why the number of digits in the coordinates
+#'   is important. Too high a precision (high number of digits) might break some
+#'   connections. The column used to indicate directions can only have the
+#'   following values: "FT" (From-To), "TF" (To-From) and "Both".
+#'
 #' @param lines A SpatialLinesDataFrame
 #' @param digits The number of digits to keep from the coordinates
-#' @param line_weight The name of a field that represent the cost to use a line
-#' @param attrs A boolean indicating if the original lines attributes
-#' @param direction A vector of integers. 0 indicates a bidirectional line and 1
-#'   an unidirectional line must be added to the graph lines
+#' @param line_weight The name of the column giving the weight of the lines
+#' @param attrs A boolean indicating if the original lines' attributes should be
+#'   stored in the final object
+#' @param direction A column name indicating authorized travelling direction on
+#'   lines. if NULL, then all lines can be used in both directions. Must be the
+#'   name of a column otherwise. The values of the column must be "FT" (From -
+#'   To), "TF" (To - From) or "Both"
 #' @return A list containing the following elements:
 #' \itemize{
-#'         \item graph: an igraph object that preserves the original lines
-#'         characteristics
+#'         \item graph: an igraph object
 #'         \item linelist: the dataframe used to build the graph
 #'         \item lines: the original SpatialLinesDataFrame
 #'         \item spvertices: a SpatialPointsDataFrame representing the vertices
@@ -105,12 +122,28 @@ build_graph <- function(lines, digits, line_weight, attrs = FALSE) {
 #' }
 #' @importFrom sp coordinates SpatialPoints SpatialPointsDataFrame
 #' @importFrom utils strcapture
-#' @keywords internal
+#' @export
 #' @examples
-#' #This is an internal function, no example provided
+#' \donttest{
+#' networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
+#' mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
+#' mtl_network$length <- rgeos::gLength(mtl_network, byid = TRUE)
+#' mtl_network$direction <- "Both"
+#' mtl_network[6, "direction"] <- "TF"
+#' mtl_network_directed <- lines_direction(mtl_network, "direction")
+#' graph_result <- build_graph_directed(lines = mtl_network_directed,
+#'         digits = 2,
+#'         line_weight = "length",
+#'         direction = "direction",
+#'         attrs = TRUE)
+#' }
 build_graph_directed <- function(lines, digits, line_weight, direction, attrs = FALSE) {
+
   # doubling the lines if needed
-  all_lines <- direct_lines(lines,direction)
+  all_lines <- lines_direction(lines, direction)
+  dir <- ifelse(all_lines[[direction]] =="Both", 0,1)
+  all_lines <- direct_lines(lines, dir)
+
   # extracting lines coordinates
   extremites <- lines_extremities(all_lines)
   start_coords <- extremites@data[extremites$pttype == "start", c("X","Y")]
@@ -122,7 +155,10 @@ build_graph_directed <- function(lines, digits, line_weight, direction, attrs = 
   weights <- all_lines[[line_weight]]
 
   # building the line list
-  linelist <- data.frame(start = start, end = end, weight = weights,
+  linelist <- data.frame(start = start,
+                         end = end,
+                         weight = weights,
+                         wkt= rgeos::writeWKT(all_lines,byid = TRUE),
                          graph_id = 1:nrow(all_lines))
   if (attrs) {
     linelist <- cbind(linelist, all_lines@data)
@@ -137,65 +173,38 @@ build_graph_directed <- function(lines, digits, line_weight, direction, attrs = 
   points <- SpatialPoints(dfvertices[c("x", "y")])
   points <- SpatialPointsDataFrame(points, dfvertices)
   raster::crs(points) <- raster::crs(lines)
+
+  ##building a spatial object for the lines
+  edge_attrs <- igraph::get.edge.attribute(graph)
+  edge_df <- data.frame(
+    "edge_id" = as.numeric(igraph::E(graph)),
+    "weight" = edge_attrs[[line_weight]],
+    "direction" = edge_attrs[[direction]]
+  )
+  edge_df$wkt <- edge_attrs$wkt
+
+  geoms <- do.call(rbind,lapply(1:nrow(edge_df),function(i){
+    wkt <- edge_df[i,"wkt"]
+    geom <- rgeos::readWKT(wkt,id=i)
+    return(geom)
+  }))
+
+  spedges <- SpatialLinesDataFrame(geoms, edge_df,match.ID = FALSE)
+  raster::crs(spedges) <- raster::crs(lines)
+  vertex_df <- igraph::ends(graph,spedges$edge_id,names = FALSE)
+  spedges$start_oid <- vertex_df[,1]
+  spedges$end_oid <- vertex_df[,2]
+
+  vertex_df <- igraph::ends(graph,linelist$graph_id,names = FALSE)
+  linelist$start_oid <- vertex_df[,1]
+  linelist$end_oid <- vertex_df[,2]
+
+
   return(list(graph = graph, linelist = linelist, lines = all_lines,
-              spvertices = points, digits = digits))
+              spvertices = points, digits = digits, spedges = spedges))
 }
 
 
-#'@title Match nodes and points
-#'
-#'@description Function to match some points (SpatialPointsDataFrame) to the
-#'  vertices of a graph.
-#'
-#'@param spvertices The spatial vertices of a graph (produced with build_graph)
-#'@param points the SpatialPointsDataFrame to match
-#'@param digits The number of digits to keep from the coordinates
-#'@param tol the maximum distance between a point and a vertex
-#'@return A vector of the corresponding vertices id, multiple points may belong
-#'  to the same vertex
-#'@importFrom sp coordinates SpatialPoints SpatialPointsDataFrame
-#'@importFrom utils txtProgressBar setTxtProgressBar
-#'@importFrom rgeos gIntersects gBuffer
-#'@keywords internal
-#' @examples
-#' #This is an internal function, no example provided
-find_vertices <- function(spvertices, points, digits, tol = 0.1) {
-    # step1 : calculate the spatialnameindex
-    coords <- coordinates(points)
-    points$tempoid <- 1:nrow(points)
-    points$spIndex <- sp_char_index(coords, digits)
-    # step2 : check which points are already well matched
-    matching <- data.table(points@data)
-    B <- data.table(spvertices@data)
-    matching[B, on = c("spIndex"="name"), names(B) := mget(paste0("i.", names(B)))]
-    matching <- matching[, .SD[1], "tempoid"]
-
-    if (any(is.na(matching$id)) == FALSE) {
-        return(matching$id)
-    } else {
-        # so we have some points that need to be matched
-        pb <- txtProgressBar(min = 0, max = nrow(matching), style = 3)
-        matching <- SpatialPointsDataFrame(coords, matching)
-        raster::crs(matching) <- raster::crs(points)
-        # si on a des cas manquant, allons les chercher !
-        values <- sapply(1:nrow(matching), function(i) {
-            setTxtProgressBar(pb, i)
-            pt <- matching[i, ]
-            if (is.na(pt$id)) {
-                test <- as.vector(gIntersects(spvertices, gBuffer(pt, width = tol),
-                  prepared = TRUE, byid = TRUE))
-                if (any(test) == FALSE) {
-                  stop(paste("no node find at the demanded distance here ",
-                    pt$spIndex, sep = ""))
-                } else {
-                  return(subset(spvertices, test)[["id"]][[1]])
-                }
-            } else {
-                return(pt$id)
-            }
-        })
-    }
-}
 
 
 #' @title Make a network directed
@@ -215,9 +224,11 @@ find_vertices <- function(spvertices, points, digits, tol = 0.1) {
 direct_lines<-function(lines,direction){
   ##producing all the lines
   cnt <- 1
-  allcoordinates <- coordinates(lines)
+  #allcoordinates <- coordinates(lines)
+  allcoordinates <- unlist(coordinates(lines), recursive = FALSE)
   listlines <- lapply(1:nrow(lines),function(i){
-    coords <- allcoordinates[[i]][[1]]
+    #coords <- allcoordinates[[i]][[1]]
+    coords <- allcoordinates[[i]]
     if(direction[[i]]==0){
       c1 <- coords
       c2 <- coords[nrow(coords):1,]
@@ -278,24 +289,37 @@ plot_graph <- function(graph) {
 #'
 #' @description A utility function to find topological errors in a network.
 #'
+#' @details This function can be used to check for three common problems in networks:
+#' disconnected components, dangle nodes and close nodes. When a network has disconnected
+#' components, this means that several unconnected graphs are composing the
+#' overall network. This can be caused by topological errors in the dataset. Dangle
+#' nodes are nodes connected to only one other node. This type of node can be normal
+#' at the border of a network, but can also be caused by topological errors. Close
+#' nodes are nodes that are not coincident, but so close that they probably should
+#' be coincident.
+#'
 #' @param lines A SpatialLinesDataFrame representing the network
 #' @param digits An integer indicating the number of digits to retain for
 #'   coordinates
-#' @param tol A float indicating the tolerance distance to identify a dangle
-#'   node
-#' @return A list with two elements. The first is a SpatialPointsDataFrame
+#' @param max_search The maximum number of nearest neighbour to search to find
+#' close_nodes
+#' @param tol The minimum distance expected between two nodes. Under that values
+#' nodes are considered as too close and are returned in the results.
+#' @return A list with three elements. The first is a SpatialPointsDataFrame
 #'   indicating for each node of the network to which component it belongs. The
-#'   second is a SpatialPointsDataFrame with the dangle nodes of the network.
+#'   second is a SpatialPointsDataFrame with nodes that are too close one of
+#'   each other. The second is a SpatialPointsDataFrame with the dangle nodes of
+#'   the network.
 #' @importFrom rgeos gLength
 #' @importFrom sp coordinates
 #' @export
 #' @examples
-#' \dontrun{
+#' \donttest{
 #' networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
 #' mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
-#' topo_errors <- graph_checking(mtl_network, 2, 2)
+#' topo_errors <- graph_checking(mtl_network, 2)
 #' }
-graph_checking <- function(lines,digits, tol){
+graph_checking <- function(lines,digits, max_search = 5, tol = 0.1){
 
   ##step1 : adjusting the lines
   lines$length <- gLength(lines,byid = TRUE)
@@ -314,21 +338,18 @@ graph_checking <- function(lines,digits, tol){
 
   ##step4 : identify dangle nodes
   graph_results$spvertices$degree <- igraph::degree(graph_results$graph)
-  potential_error <- subset(graph_results$spvertices,
+  dangle_nodes <- subset(graph_results$spvertices,
                             graph_results$spvertices$degree==1)
 
-  node_tree <- build_quadtree(graph_results$spvertices)
-  close_nodes_idx <- sapply(1:nrow(potential_error),function(i){
-    row <- potential_error[i,]
-    knn2 <- SearchTrees::knnLookup(node_tree,newdat = coordinates(row))
-    return(knn2[[2]])
-  })
-  close_nodes <- graph_results$spvertices[close_nodes_idx,]
-  XY1 <- coordinates(potential_error)
-  XY2 <- coordinates(close_nodes)
-  dist <- sqrt(rowSums((XY1 - XY2)**2))
-  dangle_nodes <- subset(potential_error,dist<tol)
+  ##step5 : find nodes that are closer to a tolerance
+  xy_nodes <- sp::coordinates(graph_results$spvertices)
+  close_dists <- FNN::knn.dist(xy_nodes, k = max_search)
+  is_error <- apply(t(close_dists),MARGIN = 2, min) <= tol
+  close_nodes <- subset(graph_results$spvertices, is_error)
+
+
   return(list("dangle_nodes" = dangle_nodes,
+              "close_nodes" = close_nodes,
               "vertex_components" = graph_results$spvertices))
 
 }
@@ -395,3 +416,58 @@ dist_mat_dupl <- function(graph, start, end ){
 }
 
 
+#' @title Split graph components
+#'
+#' @description Function to split the results of build_graph and build_graph_directed
+#' into their sub components
+#'
+#' @param graph_result A list typically obtained from the function build_graph or build_graph_directed
+#' @return A list of lists, the graph_result split for each graph component
+#' @export
+#' @examples
+#' networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
+#' mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
+#' mtl_network$length <- rgeos::gLength(mtl_network, byid = TRUE)
+#' graph_result <- build_graph(mtl_network, 2, "length", attrs = TRUE)
+#' sub_elements <- split_graph_components(graph_result)
+split_graph_components <- function(graph_result){ # nocov start
+
+  # identifying the components of the graph
+  comps <- igraph::components(graph_result$graph)
+
+  # if we have only one component, we return it
+  if(comps$no == 1){
+    return(graph_result)
+  }
+
+  vals <- unique(comps$membership)
+  graph_result$spvertices$comp <- comps$membership
+
+  elements <- lapply(vals, function(val){
+
+    # finding the elements in spvertices
+    spvertices <- subset(graph_result$spvertices, graph_result$spvertices$comp == val)
+
+    # finding the elements in spedges
+    spedges <- subset(graph_result$spedges, graph_result$spedges$start_oid %in% spvertices$id |
+                        graph_result$spedges$end_oid %in% spvertices$id)
+
+    # and their corresponding elements in linelist
+    linelist <- subset(graph_result$linelist, graph_result$linelist$graph_id %in% spedges$edge_id)
+
+    #finding the subgraph
+    graph <- igraph::induced_subgraph (graph_result$graph,
+                              igraph::V(graph_result$graph)[comps$membership==val])
+    #merging everything
+    element <- list(
+      "graph" = graph,
+      "spvertices" = spvertices,
+      "spedges" = spedges,
+      "linelist" = linelist,
+      "digits" = graph_result$digits
+    )
+
+  })
+
+  return(elements)
+}# nocov end

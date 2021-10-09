@@ -9,8 +9,8 @@ lines_direction(lines, field)
 \arguments{
 \item{lines}{A SpatialLinesDataFrame}
 
-\item{field}{Indicate a field giving informations about authorized
-traveling direction on lines. if NULL, then all lines can be used in both
+\item{field}{Indicate a field giving information about authorized
+travelling direction on lines. if NULL, then all lines can be used in both
 directions. Must be the name of a column otherwise. The values of the
 column must be "FT" (From - To), "TF" (To - From) or "Both".}
 }
@@ -18,9 +18,15 @@ column must be "FT" (From - To), "TF" (To - From) or "Both".}
 A SpatialLinesDataFrame
 }
 \description{
-A function to deal with the directions of lines.
+A function to deal with the directions of lines. It ensures
+that only From-To situation are present by reverting To-From lines. For
+the lines labelled as To-From, the order of their vertices is reverted.
 }
 \examples{
-#This is an internal function, no example provided
+networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
+mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network", verbose=FALSE)
+mtl_network$length <- rgeos::gLength(mtl_network, byid = TRUE)
+mtl_network$direction <- "Both"
+mtl_network[6, "direction"] <- "TF"
+mtl_network_directed <- lines_direction(mtl_network, "direction")
 }
-\keyword{internal}
