@@ -1,3 +1,12 @@
+## ----setup, include = FALSE---------------------------------------------------
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+backup_option <- options()
+base_wd <- getwd()
+library(ggplot2)
+
 ## ----message=FALSE, warning=FALSE---------------------------------------------
 # first load data and packages
 library(sp)
@@ -117,4 +126,11 @@ tm_shape(iso_results) +
   tm_shape(df_center) + 
   tm_dots(col = "black", size = 0.1) + 
   tm_layout(legend.outside = TRUE)
+
+## ----include = FALSE----------------------------------------------------------
+# reset all the user parameters
+options(backup_option)
+setwd(base_wd)
+oldpar <- par(mfrow = c(1,2))
+par(oldpar)
 

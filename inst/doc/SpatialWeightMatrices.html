@@ -12,7 +12,7 @@
 
 <meta name="author" content="Jeremy Gelb" />
 
-<meta name="date" content="2021-10-08" />
+<meta name="date" content="2021-10-26" />
 
 <title>Spatial Weight Matrices</title>
 
@@ -141,7 +141,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 
 <h1 class="title toc-ignore">Spatial Weight Matrices</h1>
 <h4 class="author">Jeremy Gelb</h4>
-<h4 class="date">2021-10-08</h4>
+<h4 class="date">2021-10-26</h4>
 
 
 <div id="TOC">
@@ -209,7 +209,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>Test <span class="ot">&lt;-</span> <span class="fu">moran.test</span>(nbAccident, netlistw, <span class="at">zero.policy =</span> T)</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(<span class="fu">round</span>(Test<span class="sc">$</span>estimate,<span class="dv">4</span>))</span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Moran I statistic       Expectation          Variance </span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;             5e-03            -8e-04             3e-04</span></span></code></pre></div>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;            0.0051           -0.0008            0.0003</span></span></code></pre></div>
 <p>The autocorrelation is weak, this is due to the large distance used and the fact that the analyzed variable is a counting variable (number of accidents). Indeed, the Moran I is supposed to be used on continuous variables.</p>
 <p>One could go further and define its own function to convert distances into spatial weights</p>
 <div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>my_conv_func <span class="ot">&lt;-</span> <span class="cf">function</span>(x){</span>
