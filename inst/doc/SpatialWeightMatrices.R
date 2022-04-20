@@ -11,11 +11,11 @@ load(system.file("extdata", "results_vignette_wmat.rda",
                            package = "spNetwork", mustWork = TRUE))
 library(spdep)
 
-## ----message=FALSE, warning=FALSE, eval = FALSE-------------------------------
+## ----message=FALSE, warning=FALSE, eval = FALSE, message=FALSE----------------
 #  options("rgdal_show_exportToProj4_warnings"="none")
 #  
 #  library(spNetwork)
-#  library(maptools)
+#  library(sf)
 #  library(dplyr)
 #  library(spdep)
 #  
@@ -24,8 +24,8 @@ library(spdep)
 #  eventsgpkg <- system.file("extdata", "events.gpkg",
 #                            package = "spNetwork", mustWork = TRUE)
 #  
-#  mtl_network <- rgdal::readOGR(networkgpkg,layer="small_mtl_network", verbose = FALSE)
-#  bike_accidents <- rgdal::readOGR(eventsgpkg,layer="bike_accidents_small", verbose = FALSE)
+#  mtl_network <- sf::st_read(networkgpkg,layer="small_mtl_network", quiet = TRUE)
+#  bike_accidents <- sf::st_read(eventsgpkg,layer="bike_accidents_small", quiet = TRUE)
 #  
 #  
 
@@ -36,13 +36,13 @@ library(spdep)
 #  lixels$oid <- 1:nrow(lixels)
 #  
 #  # snapping the points on the lines and counting
-#  snapped_acc <- snapPointsToLines(bike_accidents,lixels, idField ="oid")
+#  snapped_acc <- snapPointsToLines2(bike_accidents,lixels, idField ="oid")
 #  counts <- table(snapped_acc$nearest_line_id)
 #  counts_df <- data.frame("oid" = as.numeric(as.character(names(counts))),
 #                          "count" = as.numeric(counts))
 #  
 #  # merging the results
-#  lixels$nbAccident <- left_join(lixels@data,counts_df, by="oid")$count
+#  lixels$nbAccident <- left_join(lixels,counts_df, by="oid")$count
 #  nbAccident <- ifelse(is.na(lixels$nbAccident),0,lixels$nbAccident)
 
 ## ----message=FALSE, warning=FALSE, eval = FALSE-------------------------------

@@ -1,24 +1,23 @@
-## ----message=FALSE, warning=FALSE---------------------------------------------
+## ----message=FALSE, warning=FALSE, message=FALSE------------------------------
 # first load data and packages
-library(sp)
-library(maptools)
-library(rgeos)
+library(sf)
 library(spNetwork)
-library(raster)
 library(tmap)
-library(FNN)
+library(dbscan)
 
 networkgpkg <- system.file("extdata", "networks.gpkg",
                            package = "spNetwork", mustWork = TRUE)
 eventsgpkg <- system.file("extdata", "events.gpkg",
                           package = "spNetwork", mustWork = TRUE)
 
-mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network",verbose = FALSE)
-bike_accidents <- rgdal::readOGR(eventsgpkg,layer="bike_accidents", verbose = FALSE)
+mtl_network <- sf::st_read(networkgpkg,layer="mtl_network", quiet = TRUE)
+bike_accidents <- sf::st_read(eventsgpkg,layer="bike_accidents", quiet = TRUE)
 
 # then plotting the data
-plot(mtl_network)
-plot(bike_accidents,add=T,col='red',pch = 19)
+tm_shape(mtl_network) + 
+  tm_lines("black") + 
+  tm_shape(bike_accidents) + 
+  tm_dots("red", size = 0.2)
 
 ## ----include=FALSE------------------------------------------------------------
 load(system.file("extdata", "results_vignette_network_build.rda",
@@ -68,7 +67,7 @@ tm_shape(mtl_network) +
 
 ## ----message=FALSE, warning=FALSE, eval = FALSE-------------------------------
 #  new_lines$OID <- 1:nrow(new_lines)
-#  new_lines$length <- gLength(new_lines, byid = TRUE)
+#  new_lines$length <- as.numeric(st_length(new_lines))
 #  
 #  graph_result <- build_graph(new_lines, 2, "length", attrs = TRUE)
 
@@ -88,18 +87,18 @@ tm_shape(vertices) +
 
 ## ----message=FALSE, warning=FALSE, eval = FALSE-------------------------------
 #  # first: nn merging between snapped points and nodes
-#  xy1 <- coordinates(snapped_accidents)
-#  xy2 <- coordinates(vertices)
-#  corr_nodes <- get.knnx(xy2, xy1, k=1)
+#  xy1 <- st_coordinates(snapped_accidents)
+#  xy2 <- st_coordinates(vertices)
+#  corr_nodes <- dbscan::kNN(x = xy2, query = xy1, k=1)$id
 #  
-#  snapped_accidents$btws <- vertices$btws[corr_nodes[[1]]]
+#  snapped_accidents$btws <- vertices$btws[corr_nodes]
 #  
 #  # second: nn merging between original points and snapped points
-#  xy1 <- coordinates(bike_accidents)
-#  xy2 <- coordinates(snapped_accidents)
+#  xy1 <- st_coordinates(bike_accidents)
+#  xy2 <- st_coordinates(snapped_accidents)
 #  
-#  corr_nodes <- get.knnx(xy2, xy1, k=1)
-#  bike_accidents$btws <- snapped_accidents$btws[corr_nodes[[1]]]
+#  corr_nodes <- dbscan::kNN(x = xy2, query = xy1, k=1)$id
+#  bike_accidents$btws <- snapped_accidents$btws[corr_nodes]
 
 ## ----message=FALSE, warning=FALSE---------------------------------------------
 # mapping the results

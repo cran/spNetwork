@@ -1,5 +1,68 @@
 #include "spNetwork.h"
 
+// a simple function to create a vector of values between a start and an end with defined step
+std::vector<double> seq_num(double start, double end, double step){
+
+  std::vector<double> values;
+  double cumul = 0 - step;
+  while(cumul+step < end){
+    cumul+=step;
+    values.push_back(cumul);
+  }
+  return values;
+}
+
+// a simple function to create a vector of values between a start and an end with defined step
+// [[Rcpp::export]]
+std::vector<double> seq_num2(double start, double end, double step){
+
+  std::vector<double> values;
+  double cumul = 0 - step;
+  while(cumul+step <= end){
+    cumul+=step;
+    values.push_back(cumul);
+  }
+  return values;
+}
+
+// a simple function to create a vector of values between a start and an end with defined step
+// [[Rcpp::export]]
+std::vector<int> seq_num2f(int start, int end, int step){
+
+  std::vector<int> values;
+  int cumul = 0 - step;
+  while(cumul+step <= end){
+    cumul+=step;
+    values.push_back(cumul);
+  }
+  return values;
+}
+
+
+// a simple function to find the index of the first occurence of value in a numeric vector
+int get_first_index(NumericVector& v1, double x){
+  int i;
+  for( i = 0; i < v1.size(); ++i) {
+    if(v1[i] == x){
+      return i;
+    }
+  }
+  return -1;
+}
+
+// a simple function to find the index of the first occurence of value in a numeric vector
+std::vector<int> get_all_indeces(NumericVector& v1, double x){
+  int i;
+  std::vector<int> idxs;
+  for( i = 0; i < v1.size(); ++i) {
+    if(v1[i] == x){
+      idxs.push_back(i);
+    }
+  }
+  return idxs;
+}
+
+
 // short function to create a matrix from the neighbour_list
 // note : might be better as a sparse matrix ?
 IntegerMatrix make_matrix(DataFrame df, List neighbour_list){
@@ -62,3 +125,27 @@ arma::sp_mat make_edge_weight_sparse(DataFrame& df, List& neighbour_list){
   }
   return edge_mat;
 }
+
+
+// a little function used in space-time kfunctions to extend a matrix by duplicating rows and cols
+// for events that have been aggregated
+// oids is a unique id for each original event
+// locids is the location id of each original event (its location in the matrix)
+// [[Rcpp::export]]
+NumericMatrix extend_matrix_by_ids(NumericMatrix agg_mat, IntegerVector oids, IntegerVector locids){
+
+  // creating the matrix that will receive the values
+  NumericMatrix new_mat(oids.size(), oids.size());
+
+  // filling it by row and col
+  for(int i = 0; i < oids.size(); ++i){
+    int locid_i = locids(i);
+    for(int j = 0; j < oids.size(); ++j){
+      int locid_j = locids(j);
+      new_mat(i,j) = agg_mat(locid_i, locid_j);
+    }
+  }
+  return new_mat;
+}
+
+

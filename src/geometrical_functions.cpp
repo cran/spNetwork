@@ -3,6 +3,7 @@
 // **** operations which need C++ acceleration
 // ******************************************************************
 #include "spNetwork.h"
+#include "matrices_functions.h"
 
 
 // some boost libraries used to building an rtree
@@ -13,6 +14,7 @@
 #include <boost/geometry/index/rtree.hpp>
 #include <boost/geometry/algorithms/distance.hpp>
 #include <boost/foreach.hpp>
+#include <boost/geometry/index/predicates.hpp>
 
 // **** some namespaces related to boost ****
 namespace bg = boost::geometry;
@@ -22,11 +24,24 @@ namespace bgi = boost::geometry::index;
 
 // basic geometries
 typedef bg::model::d2::point_xy<double> point_t;
+//typedef bg::model::point<double, 2, bg::cs::cartesian> point_t;
 typedef bg::model::linestring<point_t> linestring_t;
-typedef bg::model::box<point_t> box;
+typedef bg::model::box<point_t> bbox;
 
 // a simple vector of boost lines
 typedef std::vector<linestring_t> lines_vector;
+
+
+// *********************************************************************
+// Get coordinates of a point
+// *********************************************************************
+double getX(point_t pt){
+  return bg::get<0>(pt);
+}
+
+double getY(point_t pt){
+  return bg::get<1>(pt);
+}
 
 
 // *********************************************************************
@@ -77,21 +92,24 @@ lines_vector lines_vector_from_coordinates(List lines){
 // see here: https://www.boost.org/doc/libs/1_76_0/libs/geometry/doc/html/geometry/spatial_indexes/rtree_quickstart.html
 // and here for enveloppe https://www.boost.org/doc/libs/1_71_0/libs/geometry/doc/html/geometry/reference/algorithms/envelope/envelope_2.html
 // the basic element here will be a pair of box;int
-typedef std::pair<box, unsigned> rtree_element;
+// another lib if necessary : https://github.com/nushoin/RTree/blob/master/RTree.h
+typedef std::pair<bbox, int> rtree_element;
 typedef bgi::rtree< rtree_element, bgi::quadratic<16>> lines_rtree;
 
 lines_rtree build_rtree_for_lines(lines_vector lines){
 
   // **** This is the classical way ****//
   // setting the empty rtree
-  bgi::rtree< rtree_element, bgi::quadratic<16> > rtree;
-  boost::geometry::model::box<point_t> abox;
+  lines_rtree mytree;
+  //boost::geometry::model::box<point_t> abox;
+  bbox abox;
 
   // iterating over the lines
-  unsigned i = 0;
+  int i = 0;
   for(i = 0 ; i < lines.size() ; i++){
     bg::envelope(lines[i], abox);
-    rtree.insert(std::make_pair(abox, i));
+    rtree_element el = std::make_pair(abox, i);
+    mytree.insert(el);
   }
 
   // **** If I use a range adaptor, the packing algo can be used and is supposed to be faster ****//
@@ -111,7 +129,7 @@ lines_rtree build_rtree_for_lines(lines_vector lines){
   //bgi::rtree<rtree_element, bgi::quadratic<16> > rtree(boxes);
 
   // returning the filled rtree
-  return rtree;
+  return mytree;
 
 };
 
@@ -141,8 +159,10 @@ vector_rtree_element find_close_lines_in_index(lines_rtree index, lines_vector l
     // calculating the box
     width = actual_dist/2.0;
     point_t mypt1(point.x()-width, point.y()-width);
+    //point_t mypt1(getX(point)-width, getY(point)-width);
     point_t mypt2(point.x()+width, point.y()+width);
-    box region(mypt1,mypt2);
+    //point_t mypt2(getX(point)+width, getY(point)+width);
+    bbox region(mypt1,mypt2);
 
     //querying the index
     index.query(bgi::intersects(region), std::back_inserter(returned_values));
@@ -293,6 +313,7 @@ List cut_lines_at_distances_cpp(List lines, NumericVector dists){
 
 double points_dot_product(point_t p1, point_t p2){
   return(p1.x()*p2.x()+p1.y()*p2.y());
+  //return(getX(p1)*getX(p2)+getY(p1)*getY(p2));
 };
 
 
@@ -303,15 +324,21 @@ point_t project_point_on_segment(point_t p, linestring_t line){
   point_t v1 = line[0];
   point_t v2 = line[1];
   // get dot product of e1, e2
+  //point_t e1(getX(v2) - getX(v1), getY(v2) - getY(v1));
   point_t e1(v2.x() - v1.x(), v2.y() - v1.y());
+  //point_t e2(getX(p) - getX(v1), getY(p) - getY(v1));
   point_t e2(p.x() - v1.x(), p.y() - v1.y());
   double valDp = points_dot_product(e1, e2);
   // get length of vectors
+  //double lenLineE1 = sqrt(getX(e1) * getX(e1) + getY(e1) * getY(e1));
   double lenLineE1 = sqrt(e1.x() * e1.x() + e1.y() * e1.y());
+  //double lenLineE2 = sqrt(getX(e2) * getX(e2) + getY(e2) * getY(e2));
   double lenLineE2 = sqrt(e2.x() * e2.x() + e2.y() * e2.y());
   double cos = valDp / (lenLineE1 * lenLineE2);
   // length of v1P'
   double projLenOfLine = cos * lenLineE2;
+  // point_t p2((getX(v1) + (projLenOfLine * getX(e1)) / lenLineE1),
+  //            (getY(v1) + (projLenOfLine * getY(e1)) / lenLineE1));
   point_t p2((v1.x() + (projLenOfLine * e1.x()) / lenLineE1),
              (v1.y() + (projLenOfLine * e1.y()) / lenLineE1));
   return p2;
@@ -326,43 +353,60 @@ point_t project_point_on_segment(point_t p, linestring_t line){
 std::pair<double, point_t> project_point_on_Linestring_distance(point_t p, linestring_t line){
 
   // step1 : finding the best segment
-  int nb_seg = line.size()-1;
+  //Rcout << "Projecting a point on a line\n";
+  int nb_seg = line.size();
+  //Rcout << "The line has "<<nb_seg<<" vertices\n";
   int i;
   int best_candidate = 0;
   double best_dist = bg::distance(p,line)*2;
+  //Rcout << "This is the best expected distance "<<best_dist<<"\n\n";
   double dist;
+  double cumdist = 0;
   linestring_t seg;
-  for(i = 0; i < nb_seg; i++){
-    //seg.empty();
+
+  for(i = 0; i < (nb_seg-1); i++){
+    //Rcout << "   Iterating on candidate "<<i<<"\n";
     seg.clear();
     seg.push_back(line[i]);
     seg.push_back(line[i+1]);
     dist = bg::distance(p,seg);
-    if(dist < best_dist){
+    //Rcout << "   the distance is "<<dist<<"\n";
+    if(dist <= best_dist){
+      //Rcout << "   it was a good candidate !\n\n";
       best_dist = dist;
       best_candidate = i;
+      break;
     }
+    cumdist += bg::distance(line[i],line[i+1]);
   }
-  // step2 : calculating the cumulative length
-  double cumdist = 0;
-  if(best_candidate > 0){
-    for(i = 0 ; i<best_candidate ; i++){
-      point_t p1 = line[i];
-      point_t p2 = line[i+1];
-      cumdist += bg::distance(p1,p2);
-    }
-  }
+  // the cumulative distance is calculated untill the first vertex of the selected segment !
 
   // step3 : projecting the point on the best candidate
+  std::pair<double, point_t> result;
   linestring_t best_segment;
-  best_segment.push_back(line[best_candidate]);
-  best_segment.push_back(line[best_candidate+1]);
+  point_t p1 = line[best_candidate];
+  point_t p2 = line[best_candidate+1];
+  float d1 = bg::distance(p1,p);
+  float d2 = bg::distance(p2,p);
 
-  point_t projpt = project_point_on_segment(p, best_segment);
+  if(d1 == 0.0){
+    // cas 1 : le point est sur la vertex de depart
+    result = std::make_pair(cumdist,p1);
+  }else if (d2 == 0.0){
+    // cas 2 : le point est sur la vertex de fin
+    result = std::make_pair((cumdist + bg::distance(p2,p1)),p2);
+  }else{
+    // cas 3 : le point est quelque part entre les deux
+    best_segment.push_back(p1);
+    best_segment.push_back(p2);
 
-  //step 4 : calculating the final dist
-  cumdist+=bg::distance(projpt, line[best_candidate]);
-  std::pair<double, point_t> result = std::make_pair(cumdist,projpt);
+    point_t projpt = project_point_on_segment(p, best_segment);
+
+    //step 4 : calculating the final dist
+    cumdist+=bg::distance(projpt, line[best_candidate]);
+    result = std::make_pair(cumdist,projpt);
+  }
+
   return result;
 }
 
@@ -427,9 +471,12 @@ List add_vertices_lines_cpp(NumericMatrix points, List lines, arma::colvec neare
   // iterating over the lines
   int i,j;
   for(i = 0; i < lines.length() ; i++){
+    //Rcout << "Iterating on line " << i << '\n';
     NumericMatrix line = lines(i);
     // finding the points to match on that line
     mat ok_pts = Xmat.rows(find(nearest_lines_idx == i));
+    //Rcout << "These points will be projected on it \n\n" << ok_pts << "\n\n";
+
     // if their is not points to add to the line
     if(ok_pts.n_rows == 0){
       new_lines.push_back(line);
@@ -452,25 +499,37 @@ List add_vertices_lines_cpp(NumericMatrix points, List lines, arma::colvec neare
       line_mat.col(1) = as<arma::vec>(Y1);
       line_mat.col(2) = as<arma::vec>(dists);
 
+      //Rcout << "Here is the matrix of the line \n\n" << line_mat << "\n\n";
+
       // step2 : create a matrix of point dists with the snapped points
       arma::mat distMat(ok_pts.n_rows, 3);
       int nr = ok_pts.n_rows;
       for(j = 0; j < nr; j++){
+        //Rcout << "Iterating on point "<<j<<"\n";
         point_t org_pt(ok_pts(j,0),ok_pts(j,1));
         std::pair<double, point_t> point_dits = project_point_on_Linestring_distance(org_pt, line_geom);
         point_t pt = point_dits.second;
+        //distMat(j,0) = getX(pt);
+        //distMat(j,1) = getY(pt);
         distMat(j,0) = pt.x();
         distMat(j,1) = pt.y();
         distMat(j,2) = point_dits.first;
       }
+      //Rcout << "Here is the matrix of the projected pts \n\n" << distMat << "\n\n";
+
       // subsetting the matrix for dists < mindist
       mat ok_distMat = distMat.rows(find(distMat.col(2) >= mindist));
       //combining the two matrices
       mat total_mat = join_cols(line_mat,ok_distMat);
+      //mat total_mat = line_mat;
+
+      //Rcout << "Here is the total matrix \n\n" << total_mat << "\n\n";
 
       // ordering with the distances
       uvec order = sort_index(total_mat.col(2));
       total_mat = total_mat.rows(order);
+
+      //Rcout << "Here is the ordered total matrix \n\n" << total_mat << "\n\n";
 
       // adding to the list of lines
       new_lines.push_back(wrap(total_mat.cols(0,1)));
@@ -517,6 +576,8 @@ List add_center_lines_cpp(List lines){
       double Y = line(j,1);
       cum_dist += sqrt(pow(X-prevX,2) + pow(Y-prevY,2));
       if((cum_dist>middle) & (ad == 0)){
+        // new_line(j,0) = getX(p);
+        // new_line(j,1) = getY(p);
         new_line(j,0) = p.x();
         new_line(j,1) = p.y();
         ad = 1;
@@ -590,8 +651,11 @@ List split_lines_at_points_cpp(arma::mat Xmat, List lines, arma::colvec nearest_
       for(j = 0; j < nr; j++){
         point_t org_pt(ok_pts(j,0),ok_pts(j,1));
         std::pair<double, point_t> point_dits = project_point_on_Linestring_distance(org_pt, line_geom);
-        distMat(j,0) = point_dits.second.x();
-        distMat(j,1) = point_dits.second.y();
+        // distMat(j,0) = getX(point_dits.second);
+        // distMat(j,1) = getY(point_dits.second);
+        point_t pt = point_dits.second;
+        distMat(j,0) = pt.x();
+        distMat(j,1) = pt.y();
         distMat(j,2) = point_dits.first;
       }
       // subsetting the matrix for dists < mindist
@@ -656,7 +720,7 @@ List lixelize_lines_cpp(List lines, double lx_length, double mindist){
       new_lines.push_back(line);
       new_index.push_back(i);
     }else{
-    // otherwise, we have things to do
+      // otherwise, we have things to do
 
       // fist, generating the points to add
       std::vector<double> break_lengths;
@@ -670,6 +734,8 @@ List lixelize_lines_cpp(List lines, double lx_length, double mindist){
         if((line_length - actual_dist-lx_length) > mindist){
           actual_dist += lx_length;
           bg::line_interpolate(line_geom,actual_dist,p);
+          // new_x.push_back(getX(p));
+          // new_y.push_back(getY(p));
           new_x.push_back(p.x());
           new_y.push_back(p.y());
           break_lengths.push_back(actual_dist);
@@ -730,3 +796,119 @@ List lixelize_lines_cpp(List lines, double lx_length, double mindist){
   return final;
 
 }
+
+
+
+// *********************************************************************
+// Points along lines
+// *********************************************************************
+
+/*
+ *
+ * A function to create some points along some lines
+ *
+ */
+// [[Rcpp::export]]
+NumericMatrix points_along_lines_cpp(List lines, double dist){
+
+  //creating the containers (a list for the points and a vector for the lines indices)
+  std::vector<double> new_X;
+  std::vector<double> new_Y;
+  std::vector<int> new_index;
+  point_t p(0,0);
+
+  // starting the iterations
+  int i,j;
+  for(i=0; i<lines.length(); i++){
+    NumericMatrix line = lines(i);
+    linestring_t line_geom = line_from_coords(line);
+    double line_length = bg::length(line_geom);
+
+    // determining how many points I will create
+    std::vector<double> dists = seq_num(0,line_length,dist);
+
+    if(dists.size() == 0){
+      dists.push_back(line_length/2.0);
+    }
+
+    // creating the points
+
+    for(double & d : dists){
+      bg::line_interpolate(line_geom, d, p);
+      // new_X.push_back(getX(p));
+      // new_Y.push_back(getY(p));
+      new_X.push_back(p.x());
+      new_Y.push_back(p.y());
+      new_index.push_back(i);
+    }
+
+    // for (j = 0; j < dists.length(); j++){
+    //   double d = dists.get(j);
+    //   bg::line_interpolate(line_geom, d, p);
+    //   new_X.push_back(p.x());
+    //   new_Y.push_back(p.y());
+    //   new_index.push_back(i);
+    // }
+
+  }
+
+  // creating the final matrix
+  NumericMatrix pts_coords(new_X.size(),3);
+
+  NumericVector vec1 = wrap(new_X);
+  pts_coords(_,0) = vec1;
+  NumericVector vec2 = wrap(new_Y);
+  pts_coords(_,1) = vec2;
+  NumericVector vec3 = wrap(new_index);
+  pts_coords(_,2) = vec3;
+
+  return pts_coords;
+
+}
+
+
+// *********************************************************************
+// Points at the center of lines
+// *********************************************************************
+
+/*
+ *
+ * A function to create some points at the center of some lines
+ *
+ */
+// [[Rcpp::export]]
+NumericMatrix points_at_lines_centers_cpp(List lines){
+
+  //creating the containers (a list for the points and a vector for the lines indices)
+  std::vector<double> new_X;
+  std::vector<double> new_Y;
+  point_t p(0,0);
+
+  // starting the iterations
+  int i,j;
+  for(i=0; i<lines.length(); i++){
+    NumericMatrix line = lines(i);
+    linestring_t line_geom = line_from_coords(line);
+    double line_length = bg::length(line_geom);
+
+    float d = line_length/2.0;
+    bg::line_interpolate(line_geom, d, p);
+    // new_X.push_back(getX(p));
+    // new_Y.push_back(getY(p));
+    new_X.push_back(p.x());
+    new_Y.push_back(p.y());
+  }
+
+  // creating the final matrix
+  NumericMatrix pts_coords(new_X.size(),2);
+
+  NumericVector vec1 = wrap(new_X);
+  pts_coords(_,0) = vec1;
+  NumericVector vec2 = wrap(new_Y);
+  pts_coords(_,1) = vec2;
+
+  return pts_coords;
+
+}
+
+

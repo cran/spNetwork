@@ -12,7 +12,7 @@
 
 <meta name="author" content="Jeremy Gelb" />
 
-<meta name="date" content="2021-10-26" />
+<meta name="date" content="2022-04-19" />
 
 <title>Spatial Weight Matrices</title>
 
@@ -26,6 +26,7 @@
   div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
   ul.task-list{list-style: none;}
     </style>
+
 
 
 <style type="text/css">
@@ -141,7 +142,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 
 <h1 class="title toc-ignore">Spatial Weight Matrices</h1>
 <h4 class="author">Jeremy Gelb</h4>
-<h4 class="date">2021-10-26</h4>
+<h4 class="date">2022-04-19</h4>
 
 
 <div id="TOC">
@@ -168,7 +169,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="st">&quot;rgdal_show_exportToProj4_warnings&quot;</span><span class="ot">=</span><span class="st">&quot;none&quot;</span>)</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(spNetwork)</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(maptools)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(sf)</span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(spdep)</span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
@@ -177,8 +178,8 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>eventsgpkg <span class="ot">&lt;-</span> <span class="fu">system.file</span>(<span class="st">&quot;extdata&quot;</span>, <span class="st">&quot;events.gpkg&quot;</span>,</span>
 <span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>                          <span class="at">package =</span> <span class="st">&quot;spNetwork&quot;</span>, <span class="at">mustWork =</span> <span class="cn">TRUE</span>)</span>
 <span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>mtl_network <span class="ot">&lt;-</span> rgdal<span class="sc">::</span><span class="fu">readOGR</span>(networkgpkg,<span class="at">layer=</span><span class="st">&quot;small_mtl_network&quot;</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>bike_accidents <span class="ot">&lt;-</span> rgdal<span class="sc">::</span><span class="fu">readOGR</span>(eventsgpkg,<span class="at">layer=</span><span class="st">&quot;bike_accidents_small&quot;</span>, <span class="at">verbose =</span> <span class="cn">FALSE</span>)</span></code></pre></div>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>mtl_network <span class="ot">&lt;-</span> sf<span class="sc">::</span><span class="fu">st_read</span>(networkgpkg,<span class="at">layer=</span><span class="st">&quot;small_mtl_network&quot;</span>, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>bike_accidents <span class="ot">&lt;-</span> sf<span class="sc">::</span><span class="fu">st_read</span>(eventsgpkg,<span class="at">layer=</span><span class="st">&quot;bike_accidents_small&quot;</span>, <span class="at">quiet =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
 <p>then we want to split lines into lixels and calculate for each lixel the number of events on that lixel.</p>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>lixels <span class="ot">&lt;-</span> <span class="fu">lixelize_lines</span>(mtl_network,<span class="dv">200</span>,<span class="at">mindist =</span> <span class="dv">50</span>)</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
@@ -186,13 +187,13 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>lixels<span class="sc">$</span>oid <span class="ot">&lt;-</span> <span class="dv">1</span><span class="sc">:</span><span class="fu">nrow</span>(lixels)</span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co"># snapping the points on the lines and counting</span></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>snapped_acc <span class="ot">&lt;-</span> <span class="fu">snapPointsToLines</span>(bike_accidents,lixels, <span class="at">idField =</span><span class="st">&quot;oid&quot;</span>)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>snapped_acc <span class="ot">&lt;-</span> <span class="fu">snapPointsToLines2</span>(bike_accidents,lixels, <span class="at">idField =</span><span class="st">&quot;oid&quot;</span>)</span>
 <span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>counts <span class="ot">&lt;-</span> <span class="fu">table</span>(snapped_acc<span class="sc">$</span>nearest_line_id)</span>
 <span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>counts_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="st">&quot;oid&quot;</span> <span class="ot">=</span> <span class="fu">as.numeric</span>(<span class="fu">as.character</span>(<span class="fu">names</span>(counts))),</span>
 <span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>                        <span class="st">&quot;count&quot;</span> <span class="ot">=</span> <span class="fu">as.numeric</span>(counts))</span>
 <span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="co"># merging the results</span></span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>lixels<span class="sc">$</span>nbAccident <span class="ot">&lt;-</span> <span class="fu">left_join</span>(lixels<span class="sc">@</span>data,counts_df, <span class="at">by=</span><span class="st">&quot;oid&quot;</span>)<span class="sc">$</span>count</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>lixels<span class="sc">$</span>nbAccident <span class="ot">&lt;-</span> <span class="fu">left_join</span>(lixels,counts_df, <span class="at">by=</span><span class="st">&quot;oid&quot;</span>)<span class="sc">$</span>count</span>
 <span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>nbAccident <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(<span class="fu">is.na</span>(lixels<span class="sc">$</span>nbAccident),<span class="dv">0</span>,lixels<span class="sc">$</span>nbAccident)</span></code></pre></div>
 <p>We use here the function <em>network_listw</em> the create a <code>listw</code> object representing the spatial weight matrix. The distances can be calculated from the centroids of the lixels, from the extremities of the lixels or from evenly spaced points on the lixels. We use here the second approach and specify it with the parameter <code>method = &quot;ends&quot;</code>.</p>
 <p>Let us consider that above 300 metres two segments are not neighbours anymore, and convert the distances between the observations into spatial weights by using the inverse of the squared distance.</p>
@@ -251,7 +252,6 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
 <li>A spatial matrix could be calculated for every type of geometries not only lines. Points can directly be used. For polygons, it is possible to use the centres of the geometries as starting points. One can also choose a distance and equally spaced starting points will be defined on the border of the polygons according to that distance.</li>
 <li>The cost of travelling on an edge could be set to something else than “length”.</li>
 <li>It is possible to specify directions on the network.</li>
-<li>With a little bit of work, it is possible to use the functions presented above to find the nearest feature of observations on a network as described <a href="https://github.com/JeremyGelb/spNetwork/issues/3">here</a>.</li>
 </ul>
 </div>
 

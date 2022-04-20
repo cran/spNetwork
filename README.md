@@ -1,7 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# spNetwork <img src='man/figures/spNetwork_logo.png' align="right" height="138.5" />
+# spNetwork <img src='man/figures/spNetwork_logo.png' align="right" style = 'height:138px;'/>
 
 ## A R package to perform spatial analysis on networks.
 
@@ -9,7 +9,7 @@
 
 [![R-CMD-check](https://github.com/JeremyGelb/spNetwork/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/JeremyGelb/spNetwork/actions/workflows/R-CMD-check.yaml)
 
-[![](https://img.shields.io/badge/devel%20version-0.2.1-green.svg)](https://jeremygelb.github.io/spNetwork/)
+[![](https://img.shields.io/badge/devel%20version-0.4.2-green.svg)](https://jeremygelb.github.io/spNetwork/)
 [![](https://www.r-pkg.org/badges/version/spNetwork?color=blue)](https://cran.r-project.org/package=spNetwork)
 [![](http://cranlogs.r-pkg.org/badges/grand-total/spNetwork?color=blue)](https://cran.r-project.org/package=spNetwork)
 [![](http://cranlogs.r-pkg.org/badges/last-month/spNetwork?color=green)](https://cran.r-project.org/package=spNetwork)
@@ -19,6 +19,23 @@ coverage](https://codecov.io/gh/JeremyGelb/spNetwork/branch/master/graph/badge.s
 
 The package’s website is available
 [here](https://jeremygelb.github.io/spNetwork/)
+
+## Breaking news
+
+Considering that `rgeos` and `maptools` will be deprecated soon, we are
+moving to sf! This requires some adjustment in the code and the
+documentation. The development version 0.4.9000 is now using `sf`.
+Please, report any bug or error in the documentation.
+
+To install the previous version using `sp`, `rgeos` and `maptools`, you
+can run the following command:
+
+``` r
+devtools::install_github("JeremyGelb/spNetwork", ref = "a3bc982")
+```
+
+Note that all the new developments will use `sf` and you should switch
+as soon as possible.
 
 ## What is this package ?
 
@@ -33,6 +50,9 @@ actual development version the implemented methods are:
     Estimate](https://jeremygelb.github.io/spNetwork/articles/NKDE.html)
     and [Details about
     NKDE](https://jeremygelb.github.io/spNetwork/articles/NKDEdetailed.html)).
+-   Temporal Network Kernel Density Estimate, a temporal extension of
+    the previous methods [Temporal Network Kernel Density
+    Estimate](https://jeremygelb.github.io/spNetwork/articles/TNKDE.html).
 -   Spatial weight matrices based on network distances, which can be
     used in a great number of traditional methods in spatial analysis
     (see the vignette [Spatial Weight
@@ -74,10 +94,7 @@ The packages uses mainly the following packages in its internal
 structure :
 
 -   igraph
--   sp
--   rgeos
--   maptools
--   raster
+-   sf
 -   future
 -   future.apply
 -   data.table
@@ -95,22 +112,22 @@ the vignettes for more details.
 ``` r
 library(spNetwork)
 library(tmap)
-library(rgdal)
+library(sf)
 
 # loading the dataset
 networkgpkg <- system.file("extdata", "networks.gpkg",
                            package = "spNetwork", mustWork = TRUE)
 eventsgpkg <- system.file("extdata", "events.gpkg",
                           package = "spNetwork", mustWork = TRUE)
-mtl_network <- readOGR(networkgpkg,layer="mtl_network",verbose = FALSE)
-bike_accidents <- readOGR(eventsgpkg,layer="bike_accidents", verbose = FALSE)
+mtl_network <- st_read(networkgpkg,layer="mtl_network", quiet = TRUE)
+bike_accidents <- st_read(eventsgpkg,layer="bike_accidents", quiet = TRUE)
 
 
 # generating sampling points at the middle of lixels
 samples <- lines_points_along(mtl_network, 50)
 
 # calculating densities
-densities <- nkde(mtl_network,
+densities <- nkde(lines = mtl_network,
                  events = bike_accidents,
                  w = rep(1,nrow(bike_accidents)),
                  samples = samples,
@@ -126,15 +143,20 @@ densities <- nkde(mtl_network,
 densities <- densities*1000
 samples$density <- densities
 
-
-
 tm_shape(samples) + 
   tm_dots(col = "density", size = 0.05, palette = "viridis",
           n = 7, style = "kmeans")
 ```
 
-<img src="man/figures/unnamed-chunk-4-1.png" width="100%" /> \* Building
-a spatial matrix based on network distance
+<img src="man/figures/unnamed-chunk-5-1.png" width="100%" />
+
+An extension for spatio-temporal dataset is also available [Temporal
+Network Kernel Density
+Estimate](https://jeremygelb.github.io/spNetwork/articles/TNKDE.html)
+
+<img src="vignettes/images/animated_map.gif" width="75%" style="display: block; margin: auto;" />
+
+-   Building a spatial matrix based on network distance
 
 ``` r
 library(spdep)
@@ -169,7 +191,7 @@ tm_shape(mtl_network) +
           palette = c("isolated" = "red","not isolated" = "blue"))
 ```
 
-<img src="man/figures/unnamed-chunk-5-1.png" width="100%" />
+<img src="man/figures/unnamed-chunk-7-1.png" width="100%" />
 
 Note that you can use this in every spatial analysis you would like to
 perform. With the converter function of spdep (like listw2mat), you can
@@ -184,8 +206,8 @@ networkgpkg <- system.file("extdata", "networks.gpkg",
 eventsgpkg <- system.file("extdata", "events.gpkg",
                           package = "spNetwork", mustWork = TRUE)
 
-main_network_mtl <- rgdal::readOGR(networkgpkg,layer="main_network_mtl", verbose = FALSE)
-mtl_theatres <- rgdal::readOGR(eventsgpkg,layer="mtl_theatres", verbose = FALSE)
+main_network_mtl <- st_read(networkgpkg,layer="main_network_mtl", quiet = TRUE)
+mtl_theatres <- st_read(eventsgpkg,layer="mtl_theatres", quiet = TRUE)
 
 # calculating the k function
 kfun_theatre <- kfunctions(main_network_mtl, mtl_theatres,
@@ -195,7 +217,7 @@ kfun_theatre <- kfunctions(main_network_mtl, mtl_theatres,
 kfun_theatre$plotg
 ```
 
-<img src="man/figures/unnamed-chunk-6-1.png" width="100%" />
+<img src="man/figures/unnamed-chunk-8-1.png" width="100%" />
 
 ### Work in progress
 
@@ -208,8 +230,22 @@ Features that will be added to the package in the future:
 
 -   temporal NKDE, a two dimensional kernel density estimation in
     network space and time
--   accessibility measures based on distance matrix between population
-    locations and services
+-   rework for using `sf` objects rather than `sp` (`rgeos` and
+    `maptools` will be deprecated in 2023). This work is undergoing,
+    please report any bug or error in the new documentation.
+
+## Reporting a bug
+
+If you encounter a bug when using spNetwork, please open an *issue*
+[here](https://github.com/JeremyGelb/spNetwork/issues). To ensure that
+the problem is quickly identified, the issue should follow the following
+guidelines:
+
+1.  Provide an informative title and do not copy-paste the error message
+    as the title.
+2.  Provide the ALL code which lead to the bug.
+3.  Indicate the version of R and spNetwork.
+4.  If possible, provide a sample of data and a reproductible example.
 
 ## Authors
 
@@ -225,9 +261,23 @@ Code of
 Conduct](https://github.com/JeremyGelb/spNetwork/blob/master/CONDUCT.md).
 By contributing to this project, you agree to abide by its terms.
 
+## Citation
+
+An article presenting `spNetwork` and NKDE has been accepted in the
+RJournal!
+
+Gelb Jérémy (2021). spNetwork, a package for network kernel density
+estimation. The R Journal.
+<https://journal.r-project.org/archive/2021/RJ-2021-102/index.html>.
+
+You can also cite the package for other methods:
+
+Gelb Jérémy (2021). spNetwork: Spatial Analysis on Network.
+<https://jeremygelb.github.io/spNetwork/>.
+
 ## License
 
-`spNetwork` version 0.1.1 is licensed under [GPL2
+`spNetwork` is licensed under [GPL2
 License](https://github.com/JeremyGelb/spNetwork/blob/master/LICENSE.txt).
 
 ## Acknowledgments

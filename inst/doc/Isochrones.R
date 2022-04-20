@@ -9,31 +9,31 @@ library(ggplot2)
 
 ## ----message=FALSE, warning=FALSE---------------------------------------------
 # first load data and packages
-library(sp)
-library(maptools)
-library(rgeos)
+library(sf)
 library(spNetwork)
 library(tmap)
-library(raster)
 
 networkgpkg <- system.file("extdata", "networks.gpkg",
                            package = "spNetwork", mustWork = TRUE)
 
-mtl_network <- rgdal::readOGR(networkgpkg,layer="mtl_network",verbose = FALSE)
+mtl_network <- sf::st_read(networkgpkg,layer="mtl_network", quiet = TRUE)
 
 # calculating the length of each segment
-mtl_network$length <- gLength(mtl_network, byid = TRUE)
+mtl_network$length <- as.numeric(st_length(mtl_network))
 
 # extracting the coordinates in one matrix
-coords <- do.call(rbind, unlist(sp::coordinates(mtl_network), recursive = FALSE))
-center <- matrix(apply(coords, 2, mean), nrow = 1)
-df_center <- data.frame("OID" = 1)
-sp::coordinates(df_center) <- center
-raster::crs(df_center) <- raster::crs(mtl_network)
+coords <- st_coordinates(mtl_network)
+center <- colMeans(coords)
+df_center <- data.frame("OID" = 1,
+                        "x" = center[1],
+                        "y" = center[2])
+df_center <- st_as_sf(df_center, coords = c("x","y"), crs = st_crs(mtl_network))
 
 # then plotting the data
-plot(mtl_network)
-plot(df_center, add = TRUE, col = "red")
+tm_shape(mtl_network) + 
+  tm_lines("black") + 
+  tm_shape(df_center) + 
+  tm_dots("red", size = 0.2)
 
 ## ----message=FALSE, warning=FALSE---------------------------------------------
 iso_results <- calc_isochrones(lines = mtl_network,
@@ -73,22 +73,19 @@ polygons <- lapply(unique(iso_results$iso_oid), function(oid){
   lines <- subset(iso_results, iso_results$iso_oid == oid)
   
   # extracting the coordinates of the lines
-  coords <- do.call(rbind, unlist(sp::coordinates(lines),
-                                  recursive = FALSE))
+  coords <- st_coordinates(lines)
   poly_coords <- concaveman(points = coords, concavity = 3)
-  poly <- sp::Polygons(list(sp::Polygon(poly_coords)), ID = oid)
+  poly <- st_polygon(list(poly_coords[,1:2]))
   return(poly)
 })
 
 # creating a SpatialPolygonsDataFrame
-df <- data.frame(
+iso_sp <- st_sf(
   iso_oid = unique(iso_results$iso_oid),
-  distance = unique(iso_results$distance)
+  distance = unique(iso_results$distance),
+  geometry = polygons,
+  crs = st_crs(iso_results)
 )
-
-iso_sp <- sp::SpatialPolygonsDataFrame(sp::SpatialPolygons(polygons),
-                                       df, match.ID = FALSE)
-raster::crs(iso_sp) <- raster::crs(mtl_network)
 
 ## ----message=FALSE, warning=FALSE---------------------------------------------
 # creating a factor and changing order for better vizualisation
@@ -108,13 +105,10 @@ tm_shape(iso_results) +
 ## ----message=FALSE, warning=FALSE---------------------------------------------
 library(smoothr)
 
-simple_polygons <- gSimplify(iso_sp, tol = 50)
-smoothed_polygons <- smooth(simple_polygons, method = "chaikin", 
+simple_polygons <- st_simplify(iso_sp, dTolerance = 50)
+smooth_iso <- smooth(simple_polygons, method = "chaikin", 
                             refinements = 5)
 
-smooth_iso <- sp::SpatialPolygonsDataFrame(smoothed_polygons,
-                                           iso_sp@data,
-                                           match.ID = FALSE)
 tm_shape(iso_results) + 
   tm_lines(col = "black")+
   tm_shape(smooth_iso) +
