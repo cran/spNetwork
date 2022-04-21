@@ -1,7 +1,7 @@
 Package: spNetwork
 Type: Package
 Title: Spatial Analysis on Network
-Version: 0.4.2
+Version: 0.4.3
 Authors@R: c(
     person("Jeremy", "Gelb", email = "jeremy.gelb@ucs.inrs.ca",role = c("aut", "cre"), comment = c(ORCID = "0000-0002-7114-2714")),
     person("Philippe", "Apparicio", email="philippe.apparicio@ucs.inrs.ca", role=c("ctb"), comment = c(ORCID = "0000-0001-6466-9342")))
@@ -34,9 +34,9 @@ SystemRequirements: C++14
 RdMacros: Rdpack
 Language: en-CA
 NeedsCompilation: yes
-Packaged: 2022-04-19 18:37:01 UTC; Gelb
+Packaged: 2022-04-20 17:55:30 UTC; Gelb
 Author: Jeremy Gelb [aut, cre] (<https://orcid.org/0000-0002-7114-2714>),
   Philippe Apparicio [ctb] (<https://orcid.org/0000-0001-6466-9342>)
 Maintainer: Jeremy Gelb <jeremy.gelb@ucs.inrs.ca>
 Repository: CRAN
-Date/Publication: 2022-04-20 12:40:03 UTC
+Date/Publication: 2022-04-21 12:40:02 UTC
