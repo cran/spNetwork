@@ -17,8 +17,7 @@ library(spNetwork)
 library(tmap)
 library(sf)
 
-eventsgpkg <- system.file("extdata", "events.gpkg", package = "spNetwork", mustWork = TRUE)
-bike_accidents <- sf::st_read(eventsgpkg,layer="bike_accidents", quiet = TRUE)
+data(bike_accidents)
 
 # converting the Date field to a numeric field (counting days)
 bike_accidents$Time <- as.POSIXct(bike_accidents$Date, format = "%Y/%m/%d")
@@ -89,8 +88,7 @@ ggplot(data = df_time) +
 
 ## ----message=FALSE, warning=FALSE, out.width = "75%", fig.align='center', message = FALSE----
 # loading the road network
-networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
-mtl_network <- sf::st_read(networkgpkg,layer="mtl_network", quiet = TRUE)
+data(mtl_network)
 
 tm_shape(mtl_network) + 
   tm_lines(col = "black") + 

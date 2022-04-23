@@ -484,11 +484,8 @@ test_that("Testing the bw selection function with Van Lieshout's Criterion and c
 
 test_that("Testing that bw selection by cv-likelihood gives the same score in single and multicore", {
 
-  networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
-  eventsgpkg <- system.file("extdata", "events.gpkg", package = "spNetwork", mustWork = TRUE)
-
-  mtl_network <- st_read(networkgpkg,layer="mtl_network")
-  bike_accidents <- st_read(eventsgpkg,layer="bike_accidents")
+  data(mtl_network)
+  data(bike_accidents)
 
   case1 <- bike_accidents[25,]
   buff <- st_buffer(case1, dist = 1000)
@@ -551,10 +548,8 @@ test_that("Testing that bw selection by cv-likelihood gives the same score in si
 
 test_that("Testing that bw selection with Van Lieshout's Criterion gives the same score in single and multicore", {
 
-  networkgpkg <- system.file("extdata", "networks.gpkg", package = "spNetwork", mustWork = TRUE)
-  eventsgpkg <- system.file("extdata", "events.gpkg", package = "spNetwork", mustWork = TRUE)
-  mtl_network <- st_read(networkgpkg,layer="mtl_network")
-  bike_accidents <- st_read(eventsgpkg,layer="bike_accidents")
+  data(mtl_network)
+  data(bike_accidents)
 
   case1 <- bike_accidents[25,]
   buff <- st_buffer(case1, dist = 1000)

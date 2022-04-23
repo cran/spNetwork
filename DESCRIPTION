@@ -1,7 +1,7 @@
 Package: spNetwork
 Type: Package
 Title: Spatial Analysis on Network
-Version: 0.4.3
+Version: 0.4.3.1
 Authors@R: c(
     person("Jeremy", "Gelb", email = "jeremy.gelb@ucs.inrs.ca",role = c("aut", "cre"), comment = c(ORCID = "0000-0002-7114-2714")),
     person("Philippe", "Apparicio", email="philippe.apparicio@ucs.inrs.ca", role=c("ctb"), comment = c(ORCID = "0000-0001-6466-9342")))
@@ -13,6 +13,7 @@ Description: Perform spatial analysis on network.
     Okabe et al (2012, ISBN:978-0470770818);Baddeley et al (2015, ISBN:9781482210200).
 License: GPL-2
 Encoding: UTF-8
+LazyData: true
 Imports: spdep (>= 1.1.2), igraph (>= 1.2.6), cubature (>= 2.0.4.1),
         future.apply (>= 1.4.0), methods (>= 1.7.1), ggplot2 (>=
         3.3.0), progressr (>= 0.4.0), data.table (>= 1.12.8),
@@ -34,9 +35,9 @@ SystemRequirements: C++14
 RdMacros: Rdpack
 Language: en-CA
 NeedsCompilation: yes
-Packaged: 2022-04-20 17:55:30 UTC; Gelb
+Packaged: 2022-04-23 21:02:08 UTC; Gelb
 Author: Jeremy Gelb [aut, cre] (<https://orcid.org/0000-0002-7114-2714>),
   Philippe Apparicio [ctb] (<https://orcid.org/0000-0001-6466-9342>)
 Maintainer: Jeremy Gelb <jeremy.gelb@ucs.inrs.ca>
 Repository: CRAN
-Date/Publication: 2022-04-21 12:40:02 UTC
+Date/Publication: 2022-04-23 23:50:02 UTC

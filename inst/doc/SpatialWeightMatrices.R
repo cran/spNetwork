@@ -19,13 +19,8 @@ library(spdep)
 #  library(dplyr)
 #  library(spdep)
 #  
-#  networkgpkg <- system.file("extdata", "networks.gpkg",
-#                             package = "spNetwork", mustWork = TRUE)
-#  eventsgpkg <- system.file("extdata", "events.gpkg",
-#                            package = "spNetwork", mustWork = TRUE)
-#  
-#  mtl_network <- sf::st_read(networkgpkg,layer="small_mtl_network", quiet = TRUE)
-#  bike_accidents <- sf::st_read(eventsgpkg,layer="bike_accidents_small", quiet = TRUE)
+#  data(mtl_network)
+#  data(bike_accidents)
 #  
 #  
 
