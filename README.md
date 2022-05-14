@@ -9,7 +9,7 @@
 
 [![R-CMD-check](https://github.com/JeremyGelb/spNetwork/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/JeremyGelb/spNetwork/actions/workflows/R-CMD-check.yaml)
 
-[![](https://img.shields.io/badge/devel%20version-0.4.3.1-green.svg)](https://jeremygelb.github.io/spNetwork/)
+[![](https://img.shields.io/badge/devel%20version-0.4.3.2-green.svg)](https://jeremygelb.github.io/spNetwork/)
 [![](https://www.r-pkg.org/badges/version/spNetwork?color=blue)](https://cran.r-project.org/package=spNetwork)
 [![](http://cranlogs.r-pkg.org/badges/grand-total/spNetwork?color=blue)](https://cran.r-project.org/package=spNetwork)
 [![](http://cranlogs.r-pkg.org/badges/last-month/spNetwork?color=green)](https://cran.r-project.org/package=spNetwork)
@@ -108,9 +108,9 @@ structure :
 -   future
 -   future.apply
 -   data.table
--   SearchTrees
 -   Rcpp
 -   RcppArmadillo
+-   BH
 
 ## Some examples
 
