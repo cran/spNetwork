@@ -9,7 +9,7 @@
 
 [![R-CMD-check](https://github.com/JeremyGelb/spNetwork/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/JeremyGelb/spNetwork/actions/workflows/R-CMD-check.yaml)
 
-[![](https://img.shields.io/badge/devel%20version-0.4.3.2-green.svg)](https://jeremygelb.github.io/spNetwork/)
+[![](https://img.shields.io/badge/devel%20version-0.4.3.6-green.svg)](https://jeremygelb.github.io/spNetwork/)
 [![](https://www.r-pkg.org/badges/version/spNetwork?color=blue)](https://cran.r-project.org/package=spNetwork)
 [![](http://cranlogs.r-pkg.org/badges/grand-total/spNetwork?color=blue)](https://cran.r-project.org/package=spNetwork)
 [![](http://cranlogs.r-pkg.org/badges/last-month/spNetwork?color=green)](https://cran.r-project.org/package=spNetwork)
@@ -81,8 +81,8 @@ actual development version the implemented methods are:
     isochrones](https://jeremygelb.github.io/spNetwork/articles/Isochrones.html))
 
 Calculation on network can be long, efforts were made to reduce
-computation time by implementing several core functions with **Rcpp**
-and **RcppArmadillo** and by using multiprocessing when possible.
+computation time by implementing several functions with **Rcpp** and
+**RcppArmadillo** and by using multiprocessing when possible.
 
 ## Installing
 

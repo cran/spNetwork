@@ -17,7 +17,7 @@ std::vector<double> seq_num(double start, double end, double step){
 std::vector<double> seq_num2(double start, double end, double step){
 
   std::vector<double> values;
-  double cumul = 0 - step;
+  double cumul = start - step;
   while(cumul+step <= end){
     cumul+=step;
     values.push_back(cumul);
@@ -30,7 +30,7 @@ std::vector<double> seq_num2(double start, double end, double step){
 std::vector<int> seq_num2f(int start, int end, int step){
 
   std::vector<int> values;
-  int cumul = 0 - step;
+  int cumul = start - step;
   while(cumul+step <= end){
     cumul+=step;
     values.push_back(cumul);
@@ -146,6 +146,20 @@ NumericMatrix extend_matrix_by_ids(NumericMatrix agg_mat, IntegerVector oids, In
     }
   }
   return new_mat;
+}
+
+
+// a little function used to reverse the order of the row in a matrix
+// borrowed here : https://stackoverflow.com/questions/31946641/reverse-numeric-matrix-by-row
+// TY Dirk !
+// [[Rcpp::export]]
+NumericMatrix reverseByRow(NumericMatrix inmat) {
+  int r = inmat.nrow();
+  NumericMatrix nw(r,inmat.ncol());
+  for(int i = 0; i < r; i++){
+    nw.row(i) = inmat.row(r-i-1);
+  }
+  return nw;
 }
 
 

@@ -1,3 +1,35 @@
+# spNetwork 0.4.3.6
+
+## corrected bugs
+
+The new version of sf created an error because of a bad use of the argument by_element in the function st_distance. It is corrected and tested now. 
+
+# spNetwork 0.4.3.5
+
+## New Features
+
+* It is now possible to create isochrones as donught instead of plain isochrones (no overlapping lines). This can be handy if the are used for mapping and to limit the size of the produced feature collections.
+
+## corrected bugs
+
+A bug occuring when splitting the data with a spatial grid has been corrected.
+
+## Documentation
+
+* There is a new vignette on the website about spatio-temporal dbscan with network distance.
+
+# spNetwork 0.4.3.4
+
+## corrected bugs
+
+* corrected two minor bugs with the kfunctions, kfunctions.mc, cross_kfunctions and cross_kfunctions.mc ([issue 8](https://github.com/JeremyGelb/spNetwork/issues/8))
+
+# spNetwork 0.4.3.3
+
+## corrected bugs
+
+* When using the nkde and nkde.mc functions, one could get an error if the samples or the events had a X or a Y column. This has been corrected.
+
 # spNetwork 0.4.3.2
 
 ## other changes
