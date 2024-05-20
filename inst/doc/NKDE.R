@@ -264,7 +264,7 @@ tm_shape(lines) +
 
 ## ----eval = FALSE-------------------------------------------------------------
 #  bws_selection_cv <- bw_cv_likelihood_calc(
-#    bw_range = c(200,700),bw_step = 50,
+#    bws = seq(50,700,50),
 #    lines = mtl_network, events = bike_accidents,
 #    w = rep(1,nrow(bike_accidents)),
 #    kernel_name = "quartic", method = "discontinuous",
@@ -275,7 +275,7 @@ tm_shape(lines) +
 #    verbose=FALSE, check=TRUE)
 #  
 #  bws_selection_cvl <- bw_cvl_calc(
-#    bw_range = c(50,700),bw_step = 50,
+#    bws = seq(50,700,50),
 #    lines = mtl_network, events = bike_accidents,
 #    w = rep(1,nrow(bike_accidents)),
 #    kernel_name = "quartic", method = "discontinuous",
@@ -285,10 +285,54 @@ tm_shape(lines) +
 #    sparse=TRUE, grid_shape=c(1,1),
 #    verbose=FALSE, check=TRUE)
 #  
+
+## ----eval = FALSE-------------------------------------------------------------
+#  bws_selection_cv_adpt_dis <- bw_cv_likelihood_calc(
+#    bws = seq(50,700,50),
+#    trim_bws = seq(50,700,50)*2,
+#    lines = mtl_network,
+#    events = bike_accidents,
+#    w = rep(1,nrow(bike_accidents)),
+#    adaptive = TRUE,
+#    kernel_name = "quartic",
+#    method = "discontinuous",
+#    diggle_correction = FALSE,
+#    study_area = NULL,
+#    max_depth = 8,
+#    digits=2,
+#    tol=0.1,
+#    agg=5,
+#    sparse=TRUE,
+#    grid_shape=c(1,1),
+#    verbose=TRUE,
+#    check=TRUE)
+#  
+#  bws_selection_cv_adpt_cont <- bw_cv_likelihood_calc(
+#    bws = seq(50,700,50),
+#    trim_bws = seq(50,700,50)*2,
+#    lines = mtl_network,
+#    events = bike_accidents,
+#    w = rep(1,nrow(bike_accidents)),
+#    adaptive = TRUE,
+#    kernel_name = "quartic",
+#    method = "continuous",
+#    diggle_correction = FALSE,
+#    study_area = NULL,
+#    max_depth = 8,
+#    digits=2,
+#    tol=0.1,
+#    agg=5,
+#    sparse=TRUE,
+#    grid_shape=c(1,1),
+#    verbose=TRUE,
+#    check=TRUE)
+#  
 #  cv_values <- data.frame(
 #    "bw" = bws_selection_cv$bw,
 #    "cv_likelihood" = bws_selection_cv$cv_scores,
-#    "cvl_crit" = bws_selection_cvl$cvl_scores
+#    "cvl_crit" = bws_selection_cvl$cvl_scores,
+#    "cv_likelihood_adpt_dis" = bws_selection_cv_adpt_dis$cv_scores,
+#    "cv_likelihood_adpt_cont" = bws_selection_cv_adpt_cont$cv_scores
 #  )
 
 ## ----echo=FALSE---------------------------------------------------------------

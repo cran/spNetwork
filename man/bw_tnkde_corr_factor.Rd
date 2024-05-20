@@ -28,7 +28,7 @@ bw_tnkde_corr_factor(
 \item{diggle_correction}{A Boolean indicating if the correction factor
 for edge effect must be used.}
 
-\item{study_area}{A feature collection of polygons 
+\item{study_area}{A feature collection of polygons
 representing the limits of the study area.}
 
 \item{events}{A feature collection of points representing the events}
@@ -55,8 +55,12 @@ between two nodes in a graph. Regular matrices are faster, but require more
 memory, in particular with multiprocessing. Sparse matrices are slower (a
 bit), but require much less memory.}
 }
+\value{
+A list of two elements, first the network correction factors, then
+the time correction factors.
+}
 \description{
-Caclulating the border correction factor for both time and network bandwidths
+Calculating the border correction factor for both time and network bandwidths
 }
 \examples{
 # no example provided, this is an internal function

@@ -5,8 +5,7 @@
 \title{Bandwidth selection by likelihood cross validation}
 \usage{
 bw_cv_likelihood_calc(
-  bw_range,
-  bw_step,
+  bws = NULL,
   lines,
   events,
   w,
@@ -14,6 +13,9 @@ bw_cv_likelihood_calc(
   method,
   diggle_correction = FALSE,
   study_area = NULL,
+  adaptive = FALSE,
+  trim_bws = NULL,
+  mat_bws = NULL,
   max_depth = 15,
   digits = 5,
   tol = 0.1,
@@ -27,14 +29,11 @@ bw_cv_likelihood_calc(
 )
 }
 \arguments{
-\item{bw_range}{The range of the bandwidths to consider, given as a numeric
-vector of two values: c(bandwidth_min, bandwidth_max)}
-
-\item{bw_step}{The step between each bandwidth to calculate given as a float}
+\item{bws}{An ordered numeric vector with the bandwidths}
 
 \item{lines}{A feature collection of linestrings representing the underlying network. The
 geometries must be simple Linestrings (may crash if some geometries
- are invalid) without MultiLineSring.}
+are invalid) without MultiLineSring.}
 
 \item{events}{events A feature collection of points representing the events on the
 network. The points will be snapped on the network to their closest line.}
@@ -50,8 +49,17 @@ simple / discontinuous / continuous (see nkde details for more information)}
 \item{diggle_correction}{A Boolean indicating if the correction factor
 for edge effect must be used.}
 
-\item{study_area}{A feature collection of polygons 
+\item{study_area}{A feature collection of polygons
 representing the limits of the study area.}
+
+\item{adaptive}{A boolean indicating if an adaptive bandwidth must be used.
+If adaptive = TRUE, the local bandwidth are derived from the global bandwidths (bws)}
+
+\item{trim_bws}{A vector indicating the maximum value an adaptive bandwidth can
+reach. Higher values will be trimmed. It must have the same length as bws.}
+
+\item{mat_bws}{A matrix giving the bandwidths for each observation and for each global bandwidth.
+This is usefull when the user want to use a different method from Abramson's smoothing regimen.}
 
 \item{max_depth}{when using the continuous and discontinuous methods, the
 calculation time and memory use can go wild  if the network has many
@@ -115,16 +123,16 @@ bandwidth that would produce the most similar results if one event was removed f
 the dataset (leave one out cross validation). We use here the shortcut formula as
 described by the package spatstat \insertCite{spatstatpkg}{spNetwork}.
 
-LCV(h) = sum[i] log(lambda[-i](x[i]))
+\eqn{LCV(h) = \sum_i \log\hat\lambda_{-i}(x_i)}
 
-Where the sum is taken for all events x[i] and where lambda[-i](x[i]) is the leave-one-out kernel
-estimate at x[i] for a bandwidth h. A higher value indicates a better bandwidth.
+Where the sum is taken for all events \eqn{x_i} and where \eqn{\hat\lambda_{-i}(x_i)} is the leave-one-out kernel
+estimate at \eqn{x_i} for a bandwidth h. A higher value indicates a better bandwidth.
 }
 \examples{
 \donttest{
 data(mtl_network)
 data(bike_accidents)
-cv_scores <- bw_cv_likelihood_calc(c(200,800),50,
+cv_scores <- bw_cv_likelihood_calc(seq(200,800,50),
                                mtl_network, bike_accidents,
                                rep(1,nrow(bike_accidents)),
                                "quartic", "simple",
@@ -137,6 +145,6 @@ cv_scores <- bw_cv_likelihood_calc(c(200,800),50,
 }
 \references{
 {
-    \insertAllCited{}
+\insertAllCited{}
 }
 }

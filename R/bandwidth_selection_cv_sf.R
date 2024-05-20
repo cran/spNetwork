@@ -236,10 +236,10 @@
 #' the dataset (leave one out cross validation). We use here the shortcut formula as
 #' described by the package spatstat \insertCite{spatstatpkg}{spNetwork}.
 #'
-#' LCV(h) = sum[i] log(lambda[-i](x[i]))
+#'  \eqn{LCV(h) = \sum_i \log\hat\lambda_{-i}(x_i)}
 #'
-#' Where the sum is taken for all events x[i] and where lambda[-i](x[i]) is the leave-one-out kernel
-#' estimate at x[i] for a bandwidth h. A higher value indicates a better bandwidth.
+#' Where the sum is taken for all events \eqn{x_i} and where \eqn{\hat\lambda_{-i}(x_i)} is the leave-one-out kernel
+#' estimate at \eqn{x_i} for a bandwidth h. A higher value indicates a better bandwidth.
 #'
 #' @references{
 #'     \insertAllCited{}
@@ -251,6 +251,7 @@
 #' @template nkde_geoms-args
 #' @template sparse-arg
 #' @template grid_shape-arg
+#' @template bw_selection_adapt-args
 #' @param sub_sample A float between 0 and 1 indicating the percentage of quadra
 #' to keep in the calculus. For large datasets, it may be useful to limit the
 #' bandwidth evaluation and thus reduce calculation time.
@@ -267,7 +268,7 @@
 #' \donttest{
 #' data(mtl_network)
 #' data(bike_accidents)
-#' cv_scores <- bw_cv_likelihood_calc(c(200,800),50,
+#' cv_scores <- bw_cv_likelihood_calc(seq(200,800,50),
 #'                                mtl_network, bike_accidents,
 #'                                rep(1,nrow(bike_accidents)),
 #'                                "quartic", "simple",
@@ -277,8 +278,10 @@
 #'                                sparse=TRUE, grid_shape=c(1,1),
 #'                                sub_sample = 1, verbose=TRUE, check=TRUE)
 #' }
-bw_cv_likelihood_calc <- function(bw_range,bw_step,lines, events, w, kernel_name, method,
+bw_cv_likelihood_calc <- function(bws = NULL,
+                                  lines, events, w, kernel_name, method,
                                   diggle_correction = FALSE, study_area = NULL,
+                                  adaptive = FALSE, trim_bws = NULL, mat_bws = NULL,
                                   max_depth = 15, digits=5, tol=0.1, agg=NULL,
                                   sparse=TRUE, grid_shape=c(1,1), sub_sample=1,
                                   zero_strat = "min_double",
@@ -295,8 +298,8 @@ bw_cv_likelihood_calc <- function(bw_range,bw_step,lines, events, w, kernel_name
   }
 
   passed <- bw_checks(check,lines,samples,events,
-           kernel_name, method, bw_net_range = bw_range, bw_time_range = NULL,
-           bw_net_step = bw_step, bw_time_step = NULL,
+           kernel_name, method, bws_net = bws,
+           adaptive = adaptive, trim_net_bws = trim_bws, arr_bws_net = mat_bws,
            diggle_correction = diggle_correction, study_area = study_area)
 
   if(zero_strat %in% c("min_double", "remove") == FALSE){
@@ -321,27 +324,54 @@ bw_cv_likelihood_calc <- function(bw_range,bw_step,lines, events, w, kernel_name
   grid <- build_grid(grid_shape,list(lines,samples,events))
 
   ## calculating the correction factor for each bw
-  ## they must be calculate for the location of the events and then stored in a matrix
-  all_bws <- seq(min(bw_range),max(bw_range),bw_step)
+  ## they must be calculated for the location of the events and then stored in a matrix
+  # all_bws <- seq(min(bw_range),max(bw_range),bw_step)
+  all_bws <- bws
 
   if(verbose){
     print("Calculating the correction factor if required")
   }
-  events_weight <- sapply(all_bws, function(bw){
+
+  ## we will construct here a matrix with all the bandwidths
+  ## if we are not in the adaptive mode, then all the columns will have
+  ## unique values
+  if(adaptive == FALSE){
+    mat_bws <- sapply(all_bws, function(x){
+      rep(x,nrow(events))
+    })
+  }else{
+    if(is.null(mat_bws)){
+      mat_bws <- adaptive_bw(grid, events, lines, all_bws, trim_bws, method,
+                             kernel_name, max_depth, tol, digits, sparse, verbose)
+      dim(mat_bws) <- c(nrow(events),length(all_bws))
+    }else{
+
+      # in the case where all the bandwidths were provided by the user
+      # we only have to extract the relevant informations from this matrix
+      all_bws <- colnames(mat_bws)
+      if(is.null(all_bws)){
+        all_bws <- 1:ncol(mat_bws)
+      }
+
+      if(nrow(mat_bws) != nrow(events)){
+        stop("The number of rows in mat_bws must be the same as the number of rows in events")
+      }
+    }
+
+  }
+  events_weight <- apply(mat_bws, MARGIN = 2, FUN = function(bws){
 
     if(diggle_correction){
-      bws <- rep(bw,nrow(events))
-      corr_factor <- correction_factor(study_area,events_loc,lines,method,bws, kernel_name, tol, digits, max_depth, sparse)
+      corr_factor <- correction_factor(study_area,events_loc,lines,method, bws, kernel_name, tol, digits, max_depth, sparse)
       corr_factor <- corr_factor[events$goid] * events$weight
 
     }else{
-      corr_factor<- rep(1,nrow(events))
+      corr_factor <- rep(1,nrow(events)) * events$weight
     }
     return(corr_factor)
   })
 
-
-  max_bw <- max(bw_range)
+  max_bw <- max(mat_bws)
 
   ## step3 splitting the dataset with each rectangle
   if(verbose){
@@ -367,7 +397,7 @@ bw_cv_likelihood_calc <- function(bw_range,bw_step,lines, events, w, kernel_name
     pb <- txtProgressBar(min = 0, max = n_quadra, style = 3)
   }
   dfs <- lapply(1:n_quadra,function(i){
-
+    print(i)
     sel <- selections[[i]]
 
     # the events_loc must cover the quadra and the bw
@@ -378,10 +408,13 @@ bw_cv_likelihood_calc <- function(bw_range,bw_step,lines, events, w, kernel_name
 
     # but I also need to know on which events I must calculate the densities (in the quadra)
     quad_events <- sel$samples
-    sel_weights <- events_weight[sel_events$wid,]
+    sel_weights <- events_weight[sel_events$wid,,drop=FALSE]
+
+    # I extract here the bws required
+    sel_bws <- mat_bws[sel_events$wid,,drop=FALSE]
 
     values <- nkde_worker_bw_sel(sel$lines, quad_events, sel_events_loc, sel_events, sel_weights,
-                                  kernel_name, all_bws,
+                                  kernel_name, sel_bws,
                                   method, div, digits,
                                   tol,sparse, max_depth, verbose)
 
@@ -393,19 +426,19 @@ bw_cv_likelihood_calc <- function(bw_range,bw_step,lines, events, w, kernel_name
 
   })
 
-
   # removing NULL elements in list
   dfs[sapply(dfs, is.null)] <- NULL
 
   # all the elements are matrices, we must combine them by row
   all_loo_scores <- do.call(rbind, dfs)
 
+
   # and we can calculate now the scores
   if(zero_strat == "min_double"){
-    all_loo_scores <- ifelse(all_loo_scores == 0, .Machine$double.xmin, all_loo_scores)
+    all_loo_scores <- ifelse(all_loo_scores <= 0, .Machine$double.xmin, all_loo_scores)
     cv_scores <- colSums(log(all_loo_scores)) / nrow(all_loo_scores)
   }else{
-    binary_mat <- all_loo_scores == 0
+    binary_mat <- all_loo_scores <= 0
     all_loo_scores <- ifelse(binary_mat, 1, all_loo_scores)
     cv_scores <- colSums(log(all_loo_scores)) / colSums(binary_mat == FALSE)
   }
@@ -431,7 +464,7 @@ bw_cv_likelihood_calc <- function(bw_range,bw_step,lines, events, w, kernel_name
 #' select an appropriate bandwidth in a data-driven approach
 #'
 #' @details  See the function bw_cv_likelihood_calc for more details. The calculation is split
-#' according to the parameter grid_shape. If grid_shape = c(1,1), then parallel processing cannot be used.
+#' according to the parameter grid_shape. If `grid_shape = c(1,1)`, then parallel processing cannot be used.
 #'
 #' @template bw_selection-args
 #' @template diggle_corr-arg
@@ -439,6 +472,7 @@ bw_cv_likelihood_calc <- function(bw_range,bw_step,lines, events, w, kernel_name
 #' @template nkde_geoms-args
 #' @template sparse-arg
 #' @template grid_shape-arg
+#' @template bw_selection_adapt-args
 #' @param sub_sample A float between 0 and 1 indicating the percentage of quadra
 #' to keep in the calculus. For large datasets, it may be useful to limit the
 #' bandwidth evaluation and thus reduce calculation time.
@@ -456,7 +490,7 @@ bw_cv_likelihood_calc <- function(bw_range,bw_step,lines, events, w, kernel_name
 #' data(mtl_network)
 #' data(bike_accidents)
 #' future::plan(future::multisession(workers=1))
-#' cv_scores <- bw_cv_likelihood_calc.mc(c(200,800),50,
+#' cv_scores <- bw_cv_likelihood_calc.mc(seq(200,800,50),
 #'                                mtl_network, bike_accidents,
 #'                                rep(1,nrow(bike_accidents)),
 #'                                "quartic", "simple",
@@ -468,8 +502,9 @@ bw_cv_likelihood_calc <- function(bw_range,bw_step,lines, events, w, kernel_name
 #' ## make sure any open connections are closed afterward
 #' if (!inherits(future::plan(), "sequential")) future::plan(future::sequential)
 #' }
-bw_cv_likelihood_calc.mc <- function(bw_range,bw_step,lines, events, w, kernel_name, method,
+bw_cv_likelihood_calc.mc <- function(bws, lines, events, w, kernel_name, method,
                                      diggle_correction = FALSE, study_area = NULL,
+                                     adaptive = FALSE, trim_bws = NULL, mat_bws = NULL,
                                      max_depth = 15, digits=5, tol=0.1, agg=NULL,
                                      sparse=TRUE, grid_shape=c(1,1), sub_sample=1,
                                      zero_strat = "min_double",
@@ -486,8 +521,8 @@ bw_cv_likelihood_calc.mc <- function(bw_range,bw_step,lines, events, w, kernel_n
   }
 
   passed <- bw_checks(check,lines,samples,events,
-                      kernel_name, method, bw_net_range = bw_range, bw_time_range = NULL,
-                      bw_net_step = bw_step, bw_time_step = NULL,
+                      kernel_name, method, bws_net = bws, bws_time = NULL,
+                      adaptive = adaptive, trim_net_bws = trim_bws, arr_bws_net = mat_bws,
                       diggle_correction = diggle_correction, study_area = study_area)
 
   if(zero_strat %in% c("min_double", "remove") == FALSE){
@@ -512,26 +547,59 @@ bw_cv_likelihood_calc.mc <- function(bw_range,bw_step,lines, events, w, kernel_n
 
   ## calculating the correction factor for each bw
   ## they must be calculate for the location of the events and then stored in a matrix
-  all_bws <- seq(min(bw_range),max(bw_range),bw_step)
+  # all_bws <- seq(min(bw_range),max(bw_range),bw_step)
+  all_bws <- bws
 
   if(verbose){
     print("Calculating the correction factor if required")
   }
-  events_weight <- sapply(all_bws, function(bw){
+
+  ## we will construct here a matrix with all the bandwidths
+  ## if we are not in the adaptive mode, then all the columns will have
+  ## unique values
+  if(adaptive == FALSE){
+    mat_bws <- sapply(all_bws, function(x){
+      rep(x,nrow(events))
+    })
+  }else{
+    if(is.null(mat_bws)){
+      mat_bws <- adaptive_bw.mc(grid = grid,
+                                events = events,
+                                lines = lines,
+                                bw = all_bws,
+                                trim_bw = trim_bws,
+                                method = method,
+                             kernel_name, max_depth, tol, digits, sparse, verbose)
+    }else{
+
+      # in the case where all the bandwidths were provided by the user
+      # we only have to extract the relevant informations from this matrix
+      all_bws <- colnames(mat_bws)
+      if(is.null(all_bws)){
+        all_bws <- 1:ncol(mat_bws)
+      }
+
+      if(nrow(mat_bws) != nrow(events)){
+        stop("The number of rows in mat_bws must be the same as the number of rows in events")
+      }
+    }
+  }
+
+
+  events_weight <- apply(mat_bws, MARGIN = 2, FUN = function(bws){
 
     if(diggle_correction){
-      bws <- rep(bw,nrow(events))
-      corr_factor <- correction_factor(study_area,events_loc,lines,method,bws, kernel_name, tol, digits, max_depth, sparse)
+      corr_factor <- correction_factor(study_area,events_loc,lines,method, bws, kernel_name, tol, digits, max_depth, sparse)
       corr_factor <- corr_factor[events$goid] * events$weight
 
     }else{
-      corr_factor<- rep(1,nrow(events))
+      corr_factor <- rep(1,nrow(events)) * events$weight
     }
     return(corr_factor)
   })
 
 
-  max_bw <- max(bw_range)
+  max_bw <- max(mat_bws)
 
   ## step3 splitting the dataset with each rectangle
   # NB : here we select the events in the quadra (samples) and the events locations in the buffer (events_loc)
@@ -564,10 +632,13 @@ bw_cv_likelihood_calc.mc <- function(bw_range,bw_step,lines, events, w, kernel_n
 
         # but I also need to know on which events I must calculate the densities (in the quadra)
         quad_events <- sel$samples
-        sel_weights <- events_weight[sel_events$wid,]
+        sel_weights <- events_weight[sel_events$wid,,drop=FALSE]
+
+        # I extract here the bws required
+        sel_bws <- mat_bws[sel_events$wid,,drop=FALSE]
 
         values <- nkde_worker_bw_sel(sel$lines, quad_events, sel_events_loc, sel_events, sel_weights,
-                                     kernel_name, all_bws,
+                                     kernel_name, sel_bws,
                                      method, div, digits,
                                      tol,sparse, max_depth, verbose)
 
@@ -588,10 +659,13 @@ bw_cv_likelihood_calc.mc <- function(bw_range,bw_step,lines, events, w, kernel_n
 
       # but I also need to know on which events I must calculate the densities (in the quadra)
       quad_events <- sel$samples
-      sel_weights <- events_weight[sel_events$wid,]
+      sel_weights <- events_weight[sel_events$wid,,drop=FALSE]
+
+      # I extract here the bws required
+      sel_bws <- mat_bws[sel_events$wid,,drop=FALSE]
 
       values <- nkde_worker_bw_sel(sel$lines, quad_events, sel_events_loc, sel_events, sel_weights,
-                                   kernel_name, all_bws,
+                                   kernel_name, sel_bws,
                                    method, div, digits,
                                    tol,sparse, max_depth, verbose)
 
@@ -621,10 +695,10 @@ bw_cv_likelihood_calc.mc <- function(bw_range,bw_step,lines, events, w, kernel_n
 
   # and we can calculate now the scores
   if(zero_strat == "min_double"){
-    all_loo_scores <- ifelse(all_loo_scores == 0, .Machine$double.xmin, all_loo_scores)
+    all_loo_scores <- ifelse(all_loo_scores <= 0, .Machine$double.xmin, all_loo_scores)
     cv_scores <- colSums(log(all_loo_scores)) / nrow(all_loo_scores)
   }else{
-    binary_mat <- all_loo_scores == 0
+    binary_mat <- all_loo_scores <= 0
     all_loo_scores <- ifelse(binary_mat, 1, all_loo_scores)
     cv_scores <- colSums(log(all_loo_scores)) / colSums(binary_mat == FALSE)
   }
@@ -657,7 +731,7 @@ bw_cv_likelihood_calc.mc <- function(bw_range,bw_step,lines, events, w, kernel_n
 #' the same location. They are linked by the goid column
 #' @param w A numeric matrix with the weight of the events for each bandwdith
 #' @param kernel_name The name of the kernel to use (string)
-#' @param bws_net A numeric vector with the network bandwidths
+#' @param bws_net A numeric matrix with the network bandwidths for each event
 #' @param method The type of NKDE to use (string)
 #' @param zero_strat A string indicating what to do when density is 0 when calculating LOO density estimate for an isolated event.
 #' "min_double" (default) replace the 0 value by the minimum double possible on the machine. "remove" will remove them from the final
@@ -680,13 +754,14 @@ nkde_worker_bw_sel <- function(lines, quad_events, events_loc, events, w,
                                zero_strat = "min_double",
                                verbose = FALSE, cvl = FALSE){
 
+
   # if we do not have event in that space, just return NULL
   if(nrow(events)==0){
     return(NULL)
   }
 
   ## step1 creating the graph
-  graph_result <- build_graph(lines,digits = digits,line_weight = "length")
+  graph_result <- build_graph(lines,digits = digits, line_weight = "length")
   graph <- graph_result$graph
   nodes <- graph_result$spvertices
   edges <- graph_result$spedges
@@ -715,10 +790,11 @@ nkde_worker_bw_sel <- function(lines, quad_events, events_loc, events, w,
   neighbour_list <- lapply(neighbour_list,function(x){return (as.numeric(x))})
 
   if(nrow(events2) == 1){
-    w <- matrix(w, ncol = length(bws_net))
+    w <- matrix(w, ncol = ncol(bws_net))
   }
 
-  kernel_values <- spNetwork::nkde_get_loo_values(method,
+  # do not forget to add spNetwork:: below
+  kernel_values <- nkde_get_loo_values(method,
                                         neighbour_list,
                                         quad_events2$vertex_id, quad_events2$wid,
                                         events2$vertex_id, events2$wid, w,

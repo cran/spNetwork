@@ -3,72 +3,62 @@
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
-#' @title Simple NKDE border correction
-#'
-#' @description A function to calculate the Diggle correction factor with the
-#' simple NKDE.
-#' @param graph The graph (igraph) used to calculate distances between nodes
-#' @param events A feature collection of points representing the events
-#' @param edges A feature collection of lines representing the edges of the graph
-#' @param bws A vector of the bandwidths for each event
-#' @keywords internal
-#' @importFrom igraph ends
-#' @return A numeric vector with the correction factor values
-corrfactor_simple <- function(graph,events,edges,bws){
-  tree_edges <- build_quadtree(edges)
-  buffers <- st_buffer(events, dist = bws)
-  #iterons sur chacun des evenements
-  dfs <- lapply(1:nrow(events),function(i){
-    e <- events[i,]
-    y <- e$vertex_id
-    bw <- bws[[i]]
-    ## step1 selecting the edges inside of the radius
-    #buff <- gBuffer(e,width=bw)
-    buff <- buffers[,i]
-    ok_edges <- spatial_request(buff,tree_edges,edges)
-    ## Step3 for each edge, find its two vertices
-    vertices <- ends(graph,ok_edges$edge_id,names = FALSE)
-    ## step4 calculate the the distance between the start node and each edge
-    ## vertex
-    un_vertices <- unique(c(vertices[,1],vertices[,2]))
-    dist1 <- as.numeric(distances(graph,y,to=un_vertices,mode="out"))
-
-    dist_table <- data.frame("vertex"=un_vertices,
-                             "distance" = dist1)
-    ## step5 aggregate all the data
-    df_edges <- data.frame("edge_id" = ok_edges$edge_id,
-                           "weight" = ok_edges$weight,
-                           "node1" = vertices[,1],
-                           "node2" = vertices[,2]
-    )
-    A <- data.table(df_edges)
-    B <- data.table(dist_table)
-    df_edges$d1 <- A[B, on = c("node1" = "vertex"),
-                     names(B) := mget(paste0("i.", names(B)))]$distance
-    df_edges$d2 <- A[B, on = c("node2" = "vertex"),
-                     names(B) := mget(paste0("i.", names(B)))]$distance
-
-    df_edges <- subset(df_edges,df_edges$d1<bw & df_edges$d2<bw)
-
-    df_edges$ecart <- abs(df_edges$d1 - df_edges$d2)
-    df_edges$lower <- with(df_edges, pmin(d1, d2))
-    df_edges$upper <- with(df_edges, pmax(d1, d2))
-    ## creation de la partie 1
-    part1 <- df_edges[c("lower","weight","edge_id")]
-    part1$distances <- part1$lower
-    part1$edge_size <- df_edges$weight - df_edges$ecart
-    part1$lower <- NULL
-    ## creation de la partie 2
-    part2 <- df_edges[c("upper","weight","edge_id")]
-    part2$distances <- part2$upper
-    part2$edge_size <- df_edges$ecart
-    part2$upper <- NULL
-    totdf <- rbind(part1,part2)
-    totdf$alpha <- 1
-    return(subset(totdf,totdf$edge_size>0))
-  })
-  return(dfs)
-}
+# this function is not usefull anymore. We keep it only for debuging purpose
+# corrfactor_simple <- function(graph,events,edges,bws){
+#   tree_edges <- build_quadtree(edges)
+#   buffers <- st_buffer(events, dist = bws)
+#   #iterons sur chacun des evenements
+#   dfs <- lapply(1:nrow(events),function(i){
+#     e <- events[i,]
+#     y <- e$vertex_id
+#     bw <- bws[[i]]
+#     ## step1 selecting the edges inside of the radius
+#     #buff <- gBuffer(e,width=bw)
+#     buff <- buffers[,i]
+#     ok_edges <- spatial_request(buff,tree_edges,edges)
+#     ## Step3 for each edge, find its two vertices
+#     vertices <- ends(graph,ok_edges$edge_id,names = FALSE)
+#     ## step4 calculate the the distance between the start node and each edge
+#     ## vertex
+#     un_vertices <- unique(c(vertices[,1],vertices[,2]))
+#     dist1 <- as.numeric(distances(graph,y,to=un_vertices,mode="out"))
+#
+#     dist_table <- data.frame("vertex"=un_vertices,
+#                              "distance" = dist1)
+#     ## step5 aggregate all the data
+#     df_edges <- data.frame("edge_id" = ok_edges$edge_id,
+#                            "weight" = ok_edges$weight,
+#                            "node1" = vertices[,1],
+#                            "node2" = vertices[,2]
+#     )
+#     A <- data.table(df_edges)
+#     B <- data.table(dist_table)
+#     df_edges$d1 <- A[B, on = c("node1" = "vertex"),
+#                      names(B) := mget(paste0("i.", names(B)))]$distance
+#     df_edges$d2 <- A[B, on = c("node2" = "vertex"),
+#                      names(B) := mget(paste0("i.", names(B)))]$distance
+#
+#     df_edges <- subset(df_edges,df_edges$d1<bw & df_edges$d2<bw)
+#
+#     df_edges$ecart <- abs(df_edges$d1 - df_edges$d2)
+#     df_edges$lower <- with(df_edges, pmin(d1, d2))
+#     df_edges$upper <- with(df_edges, pmax(d1, d2))
+#     ## creation de la partie 1
+#     part1 <- df_edges[c("lower","weight","edge_id")]
+#     part1$distances <- part1$lower
+#     part1$edge_size <- df_edges$weight - df_edges$ecart
+#     part1$lower <- NULL
+#     ## creation de la partie 2
+#     part2 <- df_edges[c("upper","weight","edge_id")]
+#     part2$distances <- part2$upper
+#     part2$edge_size <- df_edges$ecart
+#     part2$upper <- NULL
+#     totdf <- rbind(part1,part2)
+#     totdf$alpha <- 1
+#     return(subset(totdf,totdf$edge_size>0))
+#   })
+#   return(dfs)
+# }
 
 
 
@@ -135,6 +125,7 @@ correction_factor <- function(study_area, events, lines, method, bws, kernel_nam
 
   kernel_func <- select_kernel(kernel_name)
   events$goid <- 1:nrow(events)
+  events$bws <- bws
   bw <- max(bws)
 
   # step 0 calculate the distances between the points and the border
@@ -233,13 +224,23 @@ correction_factor <- function(study_area, events, lines, method, bws, kernel_nam
       }
     }
     if(method=="simple"){
-      dfs <- corrfactor_simple(graph,sel_events,edges,bws)
+      #dfs <- corrfactor_simple(graph,sel_events,edges,sel_events$bws)
+      dfs <- corrfactor_discontinuous_sparse(neighbour_list,
+                                             sel_events$vertex_id,
+                                             graph_result$linelist,
+                                             bws, max_depth)
+      dfs <- lapply(dfs, function(x){
+        x$alpha <- 1
+        return(x)
+      })
     }
 
     # and finaly calculate the correction factor by integrals
+    # more exactly, it calculate the mass of the event OUTSIDE
+    # the study area
     corrfactor <- sapply(1:length(dfs),function(j){
       df <- dfs[[j]]
-      bw <- bws[[j]]
+      bw <- sel_events$bws[[j]]
       contribs <- sapply(1:nrow(df),function(i){
         row <- df[i,]
         start <- row$distances
@@ -258,6 +259,8 @@ correction_factor <- function(study_area, events, lines, method, bws, kernel_nam
       return(sum(outside$contribs))
     })
     #corrfactor <- ifelse(corrfactor==0,1,corrfactor)
+    # and we get here the correction factor by getting the inverse of
+    # the mass inside (1-outside)
     corrfactor <- 1/(1-corrfactor)
     df <- data.frame("corrfactor" = corrfactor,
                      "goid" = sel_events$goid)
@@ -288,25 +291,32 @@ correction_factor <- function(study_area, events, lines, method, bws, kernel_nam
 #' be sampled
 #' @param bws_time A numeric vector with the temporal bandwidths
 #' @param kernel_name The name of the kernel to use
+#' @param time_limits A vector with the upper and lower limit of the time period studied
 #' @importFrom cubature cubintegrate
 #' @return A numeric vector with the correction factor values for each event
 #' @keywords internal
 #' @examples
 #' #no example provided, this is an internal function
-correction_factor_time <- function(events_time, samples_time, bws_time, kernel_name){
+correction_factor_time <- function(events_time, samples_time, bws_time, kernel_name, time_limits = NULL){
   kernel_func <- select_kernel(kernel_name)
 
   # step1 : determine the study period
-  start_time <- min(samples_time)
-  end_time <- max(samples_time)
+  if(is.null(time_limits)){
+    start_time <- min(samples_time)
+    end_time <- max(samples_time)
+  }else{
+    start_time <- min(time_limits)
+    end_time <- max(time_limits)
+  }
+
 
 
   # step2 : calculating for each event if it is above or under the limits
   low_diff <- events_time-bws_time - start_time
   low_diff <- ifelse(low_diff < 0, abs(low_diff), 0)
 
-  up_diff <- end_time - (events_time  + bws_time)
-  up_diff <- ifelse(up_diff < 0, abs(up_diff), 0)
+  up_diff <- end_time - events_time
+  up_diff <- ifelse(up_diff < 0, 0, up_diff)
 
   # calculating the part of the density outside the area (lower bound)
   get_integral1 <- function(bw, low_diff){
@@ -318,15 +328,16 @@ correction_factor_time <- function(events_time, samples_time, bws_time, kernel_n
 
   # calculating the part of the density outside the area (upper bound)
   get_integral2 <- function(bw, up_diff){
-    cubintegrate(kernel_func,lower=0,upper=up_diff,
+    cubintegrate(kernel_func,lower=up_diff,upper=bw,
                  bw=bw, relTol = 1e-15)$integral
   }
   get_inegral_vec <- Vectorize(get_integral2, vectorize.args = c("up_diff","bw"))
   out_upper <- get_inegral_vec(up_diff = up_diff, bw = bws_time)
 
-  # diffs <- (1-out_lower) + (1-out_upper) - 1
-  # return(1/diffs)
-  outer_part <- out_lower + out_upper
-  return(outer_part)
+  in_density <- 1 - (out_upper + out_lower)
+  return(1/in_density)
+
+  #outer_part <- out_lower + out_upper
+  #return(outer_part)
 
 }

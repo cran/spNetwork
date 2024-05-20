@@ -11,7 +11,7 @@ library(ggplot2)
 load(system.file("extdata", "results_vignette_kfunc.rda",
                            package = "spNetwork", mustWork = TRUE))
 
-## ---- fig.show='hold', fig.align = 'center', warning=FALSE, message=FALSE-----
+## ----fig.show='hold', fig.align = 'center', warning=FALSE, message=FALSE------
 library(spNetwork)
 library(tmap)
 
@@ -47,10 +47,10 @@ ggplot(plot_df)+
     labs(x = "distances",
          y = "empirical K-function")
 
-## ---- eval = FALSE------------------------------------------------------------
+## ----eval = FALSE-------------------------------------------------------------
 #  kfun_theatre$plotg
 
-## ---- echo=FALSE, fig.show='hold', fig.align = 'center'-----------------------
+## ----echo=FALSE, fig.show='hold', fig.align = 'center'------------------------
 ggplot(plot_df)+
     geom_ribbon(aes_string(x = "distances", ymin="lower_g", ymax = "upper_g"),
                 fill = grDevices::rgb(0.1,0.1,0.1),alpha=0.4, )+
@@ -83,10 +83,10 @@ ggplot(plot_df)+
     labs(x = "distances",
          y = "empirical K-function")
 
-## ---- eval = FALSE------------------------------------------------------------
+## ----eval = FALSE-------------------------------------------------------------
 #  kfun_biblio$plotg
 
-## ---- echo=FALSE, fig.show='hold', fig.align = 'center'-----------------------
+## ----echo=FALSE, fig.show='hold', fig.align = 'center'------------------------
 ggplot(plot_df)+
     geom_ribbon(aes_string(x = "distances", ymin="lower_g", ymax = "upper_g"),
                 fill = grDevices::rgb(0.1,0.1,0.1),alpha=0.4, )+

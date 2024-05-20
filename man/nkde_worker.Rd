@@ -23,7 +23,7 @@ nkde_worker(
 \arguments{
 \item{lines}{A feature collection of linestrings representing the network. The
 geometries must be simple lines (may crash if some geometries
- are invalid)}
+are invalid)}
 
 \item{events}{A feature collection of points representing the events on the
 network. The points will be snapped on the network.}
@@ -35,7 +35,9 @@ which the densities will be estimated.}
 
 \item{bw}{The global kernel bandwidth}
 
-\item{bws}{The kernel bandwidth (in meters) for each event}
+\item{bws}{The kernel bandwidth (in meters) for each event. Is usually a vector
+but could also be a matrix if several global bandwidths were used. In this
+case, the output value is also a matrix.}
 
 \item{method}{The method to use when calculating the NKDE, must be one of
 simple / discontinuous / continuous (see details for more information)}

@@ -51,6 +51,17 @@ int get_first_index(NumericVector& v1, double x){
 }
 
 // a simple function to find the index of the first occurence of value in a numeric vector
+int get_first_index_int(IntegerVector& v1, int x){
+  int i;
+  for( i = 0; i < v1.size(); ++i) {
+    if(v1[i] == x){
+      return i;
+    }
+  }
+  return -1;
+}
+
+// a simple function to find the index of the first occurence of value in a numeric vector
 std::vector<int> get_all_indeces(NumericVector& v1, double x){
   int i;
   std::vector<int> idxs;
@@ -61,6 +72,19 @@ std::vector<int> get_all_indeces(NumericVector& v1, double x){
   }
   return idxs;
 }
+
+// a simple function to find the index of the first occurence of value in an integer vector
+std::vector<int> get_all_indeces_int(IntegerVector& v1, int x){
+  int i;
+  std::vector<int> idxs;
+  for( i = 0; i < v1.size(); ++i) {
+    if(v1[i] == x){
+      idxs.push_back(i);
+    }
+  }
+  return idxs;
+}
+
 
 
 // short function to create a matrix from the neighbour_list
@@ -105,6 +129,26 @@ arma::sp_mat make_matrix_sparse(DataFrame df, List neighbour_list){
   return edge_mat;
 }
 
+
+
+arma::sp_imat make_imatrix_sparse(DataFrame df, List neighbour_list){
+  List edge_list;
+  IntegerVector starts = df["start_oid"];
+  IntegerVector ends = df["end_oid"];
+  IntegerVector edge_id = df["graph_id"];
+
+  //making all the elements empty
+  int cnt1 = neighbour_list.length();
+  arma::sp_imat edge_mat(cnt1+1,cnt1+1);
+
+  //then filling it !
+  int cnt = starts.length();
+  for(int i=0; i < cnt; ++i){
+    edge_mat(starts[i],ends[i]) = edge_id[i];
+    edge_mat(ends[i],starts[i]) = edge_id[i];
+  }
+  return edge_mat;
+}
 
 
 arma::sp_mat make_edge_weight_sparse(DataFrame& df, List& neighbour_list){
@@ -163,3 +207,15 @@ NumericMatrix reverseByRow(NumericMatrix inmat) {
 }
 
 
+//' @title euclidean distance between rows of a matrix and a vector (arma mode)
+//' @name calcEuclideanDistance3
+//' @param y a matrix
+//' @param x a vector (same length as ncol(matrix))
+//' @return a vector (same length as nrow(matrix))
+//' @export
+//' @keywords internal
+//'
+// [[Rcpp::export]]
+arma::colvec calcEuclideanDistance3(arma::mat y, arma::mat x){
+   return arma::sqrt(arma::sum(arma::pow(y.each_row() - x,2),1));
+ }

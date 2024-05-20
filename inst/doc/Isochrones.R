@@ -122,6 +122,4 @@ tm_shape(iso_results) +
 # reset all the user parameters
 options(backup_option)
 setwd(base_wd)
-oldpar <- par(mfrow = c(1,2))
-par(oldpar)
 

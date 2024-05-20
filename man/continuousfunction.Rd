@@ -2,24 +2,9 @@
 % Please edit documentation in R/RcppExports.R
 \name{continuousfunction}
 \alias{continuousfunction}
-\alias{continuous_nkde_cpp_arma_sparse}
 \alias{continuous_nkde_cpp_arma}
-\title{The main function to calculate continuous NKDE (with ARMADILO and sparse matrix)}
+\title{The main function to calculate continuous NKDE (with ARMADILO and integer matrix)}
 \usage{
-continuous_nkde_cpp_arma_sparse(
-  neighbour_list,
-  events,
-  weights,
-  samples,
-  bws,
-  kernel_name,
-  nodes,
-  line_list,
-  max_depth,
-  verbose,
-  div = "bw"
-)
-
 continuous_nkde_cpp_arma(
   neighbour_list,
   events,
@@ -59,12 +44,8 @@ continuous_nkde_cpp_arma(
 }
 \value{
 a DataFrame with two columns : the kernel values (sum_k) and the number of events for each sample (n)
-
-a DataFrame with two columns : the kernel values (sum_k) and the number of events for each sample (n)
 }
 \description{
-The main function to calculate continuous NKDE (with ARMADILO and sparse matrix)
-
 The main function to calculate continuous NKDE (with ARMADILO and integer matrix)
 }
 \keyword{internal}

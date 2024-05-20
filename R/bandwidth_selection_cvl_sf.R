@@ -214,6 +214,7 @@
 #' @template nkde_geoms-args
 #' @template sparse-arg
 #' @template grid_shape-arg
+#' @template bw_selection_adapt-args
 #' @param sub_sample A float between 0 and 1 indicating the percentage of quadra
 #' to keep in the calculus. For large datasets, it may be useful to limit the
 #' bandwidth evaluation and thus reduce calculation time.
@@ -230,7 +231,7 @@
 #' \donttest{
 #' data(mtl_network)
 #' data(bike_accidents)
-#' cv_scores <- bw_cvl_calc(c(200,400),50,
+#' cv_scores <- bw_cvl_calc(seq(200,400,50),
 #'                                mtl_network, bike_accidents,
 #'                                rep(1,nrow(bike_accidents)),
 #'                                "quartic", "discontinuous",
@@ -240,8 +241,11 @@
 #'                                sparse=TRUE, grid_shape=c(1,1),
 #'                                sub_sample = 1, verbose=TRUE, check=TRUE)
 #'}
-bw_cvl_calc <- function(bw_range, bw_step,lines, events, w, kernel_name, method,
-                        diggle_correction = FALSE, study_area = NULL, max_depth = 15,
+bw_cvl_calc <- function(bws = NULL,
+                        lines, events, w, kernel_name, method,
+                        diggle_correction = FALSE, study_area = NULL,
+                        adaptive = FALSE, trim_bws = NULL, mat_bws = NULL,
+                        max_depth = 15,
                         digits=5, tol=0.1, agg=NULL, sparse=TRUE,
                         zero_strat = "min_double",
                         grid_shape=c(1,1), sub_sample=1, verbose=TRUE, check=TRUE){
@@ -259,8 +263,8 @@ bw_cvl_calc <- function(bw_range, bw_step,lines, events, w, kernel_name, method,
   }
 
   passed <- bw_checks(check,lines,samples,events,
-                      kernel_name, method, bw_net_range = bw_range, bw_time_range = NULL,
-                      bw_net_step = bw_step, bw_time_step = NULL,
+                      kernel_name, method, bws_net = bws, bws_time = NULL,
+                      adaptive = adaptive, trim_net_bws = trim_bws,
                       diggle_correction = diggle_correction, study_area = study_area)
 
   if(zero_strat %in% c("min_double", "remove") == FALSE){
@@ -285,26 +289,53 @@ bw_cvl_calc <- function(bw_range, bw_step,lines, events, w, kernel_name, method,
 
   ## calculating the correction factor for each bw
   ## they must be calculate for the location of the events and then stored in a matrix
-  all_bws <- seq(min(bw_range),max(bw_range),bw_step)
+  # all_bws <- seq(min(bw_range),max(bw_range),bw_step)
+  all_bws <- bws
 
   if(verbose){
     print("Calculating the correction factor if required")
   }
-  events_weight <- sapply(all_bws, function(bw){
+
+  ## we will construct here a matrix with all the bandwidths
+  ## if we are not in the adaptive mode, then all the columns will have
+  ## unique values
+  if(adaptive == FALSE){
+    mat_bws <- sapply(all_bws, function(x){
+      rep(x,nrow(events))
+    })
+  }else{
+    if(is.null(mat_bws)){
+      mat_bws <- adaptive_bw(grid, events, lines, all_bws, trim_bws, method,
+                             kernel_name, max_depth, tol, digits, sparse, verbose)
+    }else{
+
+      # in the case where all the bandwidths were provided by the user
+      # we only have to extract the relevant informations from this matrix
+      all_bws <- colnames(mat_bws)
+      if(is.null(all_bws)){
+        all_bws <- 1:ncol(mat_bws)
+      }
+
+      if(nrow(mat_bws) != nrow(events)){
+        stop("The number of rows in mat_bws must be the same as the number of rows in events")
+      }
+    }
+  }
+
+  events_weight <- apply(mat_bws, MARGIN = 2, FUN = function(bws){
 
     if(diggle_correction){
-      bws <- rep(bw,nrow(events))
-      corr_factor <- correction_factor(study_area,events_loc,lines,method,bws, kernel_name, tol, digits, max_depth, sparse)
+      corr_factor <- correction_factor(study_area,events_loc,lines,method, bws, kernel_name, tol, digits, max_depth, sparse)
       corr_factor <- corr_factor[events$goid] * events$weight
 
     }else{
-      corr_factor<- rep(1,nrow(events))
+      corr_factor <- rep(1,nrow(events)) * events$weight
     }
     return(corr_factor)
   })
 
 
-  max_bw <- max(bw_range)
+  max_bw <- max(mat_bws)
 
   ## step3 splitting the dataset with each rectangle
   # NB : here we select the events in the quadra (samples) and the events locations in the buffer (events_loc)
@@ -340,8 +371,11 @@ bw_cvl_calc <- function(bw_range, bw_step,lines, events, w, kernel_name, method,
     quad_events <- sel$samples
     sel_weights <- events_weight[sel_events$wid,]
 
+    # I extract here the bws required
+    sel_bws <- mat_bws[sel_events$wid,]
+
     values <- nkde_worker_bw_sel(sel$lines, quad_events, sel_events_loc, sel_events, sel_weights,
-                                  kernel_name, all_bws,
+                                  kernel_name, sel_bws,
                                   method, div, digits,
                                   tol,sparse, max_depth, verbose, cvl = TRUE)
     # NOTE : values is a matrix
@@ -381,7 +415,7 @@ bw_cvl_calc <- function(bw_range, bw_step,lines, events, w, kernel_name, method,
 #' select an appropriate bandwidth in a data-driven approach. A plan from the package future can be used
 #' to split the work across several cores. The different cells generated in accordance with the
 #' argument grid_shape are used for the parallelization. So if only one cell is
-#' generated (grid_shape = c(1,1)), the function will use only one core. The progress bar
+#' generated (`grid_shape = c(1,1)`), the function will use only one core. The progress bar
 #' displays the progression for the cells.
 #'
 #'
@@ -393,6 +427,12 @@ bw_cvl_calc <- function(bw_range, bw_step,lines, events, w, kernel_name, method,
 #' @template nkde_geoms-args
 #' @template sparse-arg
 #' @template grid_shape-arg
+#' @template bw_selection_adapt-args
+#' @param adaptive A boolean indicating if an adaptive bandwidth must be used.
+#' If adaptive = TRUE, the local bandwidth are derived from the global bandwidths
+#' calculated from bw_range and bw_step.
+#' @param trim_bws A vector indicating the maximum value an adaptive bandwidth can
+#' reach. Higher values will be trimmed. It must have the same length as `bws`.
 #' @param sub_sample A float between 0 and 1 indicating the percentage of quadra
 #' to keep in the calculus. For large datasets, it may be useful to limit the
 #' bandwidth evaluation and thus reduce calculation time.
@@ -410,7 +450,7 @@ bw_cvl_calc <- function(bw_range, bw_step,lines, events, w, kernel_name, method,
 #' data(mtl_network)
 #' data(bike_accidents)
 #' future::plan(future::multisession(workers=1))
-#' cv_scores <- bw_cvl_calc.mc(c(200,400),50,
+#' cv_scores <- bw_cvl_calc.mc(seq(200,400,50),
 #'                                mtl_network, bike_accidents,
 #'                                rep(1,nrow(bike_accidents)),
 #'                                "quartic", "discontinuous",
@@ -422,8 +462,10 @@ bw_cvl_calc <- function(bw_range, bw_step,lines, events, w, kernel_name, method,
 #' ## make sure any open connections are closed afterward
 #' if (!inherits(future::plan(), "sequential")) future::plan(future::sequential)
 #' }
-bw_cvl_calc.mc <- function(bw_range,bw_step,lines, events, w, kernel_name, method,
-                           diggle_correction = FALSE, study_area = NULL, max_depth = 15,
+bw_cvl_calc.mc <- function(bws = NULL, lines, events, w, kernel_name, method,
+                           diggle_correction = FALSE, study_area = NULL,
+                           adaptive = FALSE, trim_bws = NULL, mat_bws = NULL,
+                           max_depth = 15,
                            digits=5, tol=0.1, agg=NULL, sparse=TRUE,
                            zero_strat = "min_double",
                            grid_shape=c(1,1), sub_sample=1, verbose=TRUE, check=TRUE){
@@ -441,8 +483,8 @@ bw_cvl_calc.mc <- function(bw_range,bw_step,lines, events, w, kernel_name, metho
   }
 
   passed <- bw_checks(check,lines,samples,events,
-                      kernel_name, method, bw_net_range = bw_range, bw_time_range = NULL,
-                      bw_net_step = bw_step, bw_time_step = NULL,
+                      kernel_name, method, bws_net = bws, bws_time = NULL,
+                      adaptive = adaptive, trim_net_bws = trim_bws,
                       diggle_correction = diggle_correction, study_area = study_area)
 
 
@@ -464,27 +506,52 @@ bw_cvl_calc.mc <- function(bw_range,bw_step,lines, events, w, kernel_name, metho
 
   ## calculating the correction factor for each bw
   ## they must be calculate for the location of the events and then stored in a matrix
-  all_bws <- seq(min(bw_range),max(bw_range),bw_step)
+  # all_bws <- seq(min(bw_range),max(bw_range),bw_step)
+  all_bws <- bws
 
   if(verbose){
     print("Calculating the correction factor if required")
   }
-  events_weight <- sapply(all_bws, function(bw){
+
+  ## we will construct here a matrix with all the bandwidths
+  ## if we are not in the adaptive mode, then all the columns will have
+  ## unique values
+  if(adaptive == FALSE){
+    mat_bws <- sapply(all_bws, function(x){
+      rep(x,nrow(events))
+    })
+  }else{
+    if(is.null(mat_bws)){
+      mat_bws <- adaptive_bw(grid, events, lines, all_bws, trim_bws, method,
+                             kernel_name, max_depth, tol, digits, sparse, verbose)
+    }else{
+
+      # in the case where all the bandwidths were provided by the user
+      # we only have to extract the relevant informations from this matrix
+      all_bws <- colnames(mat_bws)
+      if(is.null(all_bws)){
+        all_bws <- 1:ncol(mat_bws)
+      }
+
+      if(nrow(mat_bws) != nrow(events)){
+        stop("The number of rows in mat_bws must be the same as the number of rows in events")
+      }
+    }
+  }
+
+  events_weight <- apply(mat_bws, MARGIN = 2, FUN = function(bws){
 
     if(diggle_correction){
-      bws <- rep(bw,nrow(events))
-      corr_factor <- correction_factor(study_area,events_loc,lines,method,bws, kernel_name, tol, digits, max_depth, sparse)
+      corr_factor <- correction_factor(study_area,events_loc,lines,method, bws, kernel_name, tol, digits, max_depth, sparse)
       corr_factor <- corr_factor[events$goid] * events$weight
 
     }else{
-      corr_factor<- rep(1,nrow(events))
+      corr_factor <- rep(1,nrow(events)) * events$weight
     }
     return(corr_factor)
   })
 
-
-  max_bw <- max(bw_range)
-
+  max_bw <- max(mat_bws)
   ## step3 splitting the dataset with each rectangle
   # NB : here we select the events in the quadra (samples) and the events locations in the buffer (events_loc)
   selections <- split_by_grid(grid, events, events_loc, lines,max_bw, tol, digits, split_all = FALSE)
@@ -517,8 +584,11 @@ bw_cvl_calc.mc <- function(bw_range,bw_step,lines, events, w, kernel_name, metho
         quad_events <- sel$samples
         sel_weights <- events_weight[sel_events$wid,]
 
+        # I extract here the bws required
+        sel_bws <- mat_bws[sel_events$wid,]
+
         values <- nkde_worker_bw_sel(sel$lines, quad_events, sel_events_loc, sel_events, sel_weights,
-                                     kernel_name, all_bws,
+                                     kernel_name, sel_bws,
                                      method, div, digits,
                                      tol,sparse, max_depth, verbose, cvl = TRUE)
 
@@ -540,8 +610,11 @@ bw_cvl_calc.mc <- function(bw_range,bw_step,lines, events, w, kernel_name, metho
       quad_events <- sel$samples
       sel_weights <- events_weight[sel_events$wid,]
 
+      # I extract here the bws required
+      sel_bws <- mat_bws[sel_events$wid,]
+
       values <- nkde_worker_bw_sel(sel$lines, quad_events, sel_events_loc, sel_events, sel_weights,
-                                   kernel_name, all_bws,
+                                   kernel_name, sel_bws,
                                    method, div, digits,
                                    tol,sparse, max_depth, verbose, cvl = TRUE)
       return(values)

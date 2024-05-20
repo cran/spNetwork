@@ -25,13 +25,13 @@
 //' @return a matrix with the impact of the event v on each other events for
 //' each pair of bandwidths (mat(event, bws_net))
 //' @keywords internal
-arma::mat ess_kernel_loo_nkde(fptros kernel_func, arma::sp_mat& edge_mat,
-                                NumericVector& events,
-                                NumericVector& events_wid,
-                                List& neighbour_list,
+arma::mat ess_kernel_loo_nkde(fptros kernel_func, arma::sp_imat &edge_mat,
+                                IntegerVector &events,
+                                IntegerVector &events_wid,
+                                List &neighbour_list,
                                 int v, int wid,
-                                arma::vec bws_net,
-                                NumericVector& line_weights, int max_depth){
+                                arma::rowvec &bws_net,
+                                NumericVector &line_weights, int max_depth){
 
   //step0 : generate the queue
   int depth = 0;
@@ -50,6 +50,9 @@ arma::mat ess_kernel_loo_nkde(fptros kernel_func, arma::sp_mat& edge_mat,
   double bw_net;
 
   //lancement des iterations
+
+  // NB : no speed gained here by using a struc or reducing the number of variable declaration
+
   while(data_holder.empty()==FALSE){
     //unpacking (imagine some loop unrolling here with a function to deal with.)
     List cas = data_holder.front();
@@ -81,7 +84,7 @@ arma::mat ess_kernel_loo_nkde(fptros kernel_func, arma::sp_mat& edge_mat,
           // find the edge between the two nodes
           int edge_id = edge_mat(v,v2);
           double d2 = line_weights[edge_id-1] + d;
-          std::vector<int> index = get_all_indeces(events,v2);
+          std::vector<int> index = get_all_indeces_int(events,v2);
           if(index.size() >0 ){
             // il semble que v2 soit un noeud pour lequel au moins un evenement est present
             for(int ii = 0; ii < bws_net.n_elem ; ii++){
@@ -130,13 +133,13 @@ arma::mat ess_kernel_loo_nkde(fptros kernel_func, arma::sp_mat& edge_mat,
 //' @param max_depth the maximum recursion depth
 //' @return a cube with the impact of the event v on each other events for
 //' each pair of bandwidths (cube(bws_net, bws_time, events))
-arma::mat esd_kernel_loo_nkde(fptros kernel_func, arma::sp_mat& edge_mat,
-                                NumericVector& events,
-                                NumericVector& events_wid,
-                                List& neighbour_list,
+arma::mat esd_kernel_loo_nkde(fptros kernel_func, arma::sp_imat &edge_mat,
+                                IntegerVector &events,
+                                IntegerVector &events_wid,
+                                List &neighbour_list,
                                 int v, int wid,
-                                arma::vec bws_net,
-                                NumericVector& line_weights, int max_depth){
+                                arma::rowvec &bws_net,
+                                NumericVector &line_weights, int max_depth){
 
   //step0 : generate the queue
   int depth = 0;
@@ -202,7 +205,7 @@ arma::mat esd_kernel_loo_nkde(fptros kernel_func, arma::sp_mat& edge_mat,
 
           //est ce que v2 est un evenement pour lequel on doit garder la valeur
 
-          std::vector<int> index = get_all_indeces(events,v2);
+          std::vector<int> index = get_all_indeces_int(events,v2);
           if(index.size() >0 ){
 
             for(int ii = 0; ii < bws_net.n_elem ; ii++){
@@ -253,13 +256,13 @@ arma::mat esd_kernel_loo_nkde(fptros kernel_func, arma::sp_mat& edge_mat,
 //' @param max_depth the maximum recursion depth
 //' @return a cube with the impact of the event v on each other events for
 //' each pair of bandwidths (cube(bws_net, bws_time, events))
-arma::mat esc_kernel_loo_nkde(fptros kernel_func, arma::sp_mat& edge_mat,
-                                NumericVector& events,
-                                NumericVector& events_wid,
-                                List& neighbour_list,
+arma::mat esc_kernel_loo_nkde(fptros kernel_func, arma::sp_imat &edge_mat,
+                                IntegerVector &events,
+                                IntegerVector &events_wid,
+                                List &neighbour_list,
                                 int v, int wid,
-                                arma::vec bws_net,
-                                NumericVector& line_weights, int max_depth){
+                                arma::rowvec &bws_net,
+                                NumericVector &line_weights, int max_depth){
   //step0 : generate the queue
   int depth = 0;
   struct acase{
@@ -300,7 +303,7 @@ arma::mat esc_kernel_loo_nkde(fptros kernel_func, arma::sp_mat& edge_mat,
     // we will update the densities on v
     // but only if v is a vertex on wich I can find an event
 
-    std::vector<int> index = get_all_indeces(events,v);
+    std::vector<int> index = get_all_indeces_int(events,v);
 
     if(index.size() >0 ){
       for(int ii = 0; ii < bws_net.n_elem ; ii++){
@@ -386,7 +389,7 @@ arma::mat esc_kernel_loo_nkde(fptros kernel_func, arma::sp_mat& edge_mat,
 //' @param events_wid a NumericVector indicating the unique id of all the events
 //' @param weights a matrix with the weights associated with each event (row) for each
 //' bws_net (cols).
-//' @param bws_net an arma::vec with the network bandwidths to consider
+//' @param bws_net an arma::mat with the network bandwidths to consider for each event
 //' @param kernel_name a string with the name of the kernel to use
 //' @param line_list a DataFrame describing the lines
 //' @param max_depth the maximum recursion depth
@@ -396,12 +399,14 @@ arma::mat esc_kernel_loo_nkde(fptros kernel_func, arma::sp_mat& edge_mat,
 //' @examples
 //' # no example provided, this is an internal function
 // [[Rcpp::export]]
-arma::mat nkde_get_loo_values(std::string method, List neighbour_list,
-                               NumericVector sel_events, NumericVector sel_events_wid,
-                               NumericVector events, NumericVector events_wid,
-                               arma::mat weights,
-                               arma::vec bws_net, std::string kernel_name,
-                               DataFrame line_list, int max_depth, bool cvl){
+arma::mat nkde_get_loo_values(std::string method, List &neighbour_list,
+                               IntegerVector &sel_events,
+                               IntegerVector &sel_events_wid,
+                               IntegerVector &events,
+                               IntegerVector &events_wid,
+                               arma::mat &weights,
+                               arma::mat &bws_net, std::string kernel_name,
+                               DataFrame &line_list, int max_depth, bool cvl){
 
   //selecting the kernel function
   fptros kernel_func = select_kernelos(kernel_name);
@@ -410,11 +415,11 @@ arma::mat nkde_get_loo_values(std::string method, List neighbour_list,
   NumericVector line_weights = line_list["weight"];
 
   // NOTE WE calculate the values only for the events in sel_events
-  arma::mat base_k(sel_events.length(), bws_net.n_elem);
+  arma::mat base_k(sel_events.length(), bws_net.n_cols);
 
   //calculer la matrice des lignes
   //IntegerMatrix edge_mat = make_matrix(line_list,neighbour_list);
-  arma::sp_mat edge_mat = make_matrix_sparse(line_list,neighbour_list);
+  arma::sp_imat edge_mat = make_imatrix_sparse(line_list, neighbour_list);
   arma::mat k;
   //step2 : iterer sur chaque event de la zone d'etude
   int cnt_e = events.length()-1;
@@ -422,50 +427,53 @@ arma::mat nkde_get_loo_values(std::string method, List neighbour_list,
     //preparer les differentes valeurs de departs pour l'event y
     int y = events[i];
     int wid = events_wid[i];
+    arma::rowvec ibws = bws_net.row(i);
     // launching recursion
     // here we got the the influences of the vertex y on each other selected event in quadra
     if(method == "simple"){
       k = ess_kernel_loo_nkde(kernel_func, edge_mat, sel_events,sel_events_wid,
                                neighbour_list,
                                y, wid,
-                               bws_net,
+                               ibws,
                                line_weights, max_depth);
 
     }else if (method == "discontinuous"){
       k = esd_kernel_loo_nkde(kernel_func, edge_mat, sel_events,sel_events_wid,
                                neighbour_list,
                                y, wid,
-                               bws_net,
+                               ibws,
                                line_weights, max_depth);
     }else{
       k = esc_kernel_loo_nkde(kernel_func, edge_mat, sel_events,sel_events_wid,
                                neighbour_list,
                                y, wid,
-                               bws_net,
+                               ibws,
                                line_weights, max_depth);
     }
-    // error at observation 33
     //Rcout << "Here is the k vector value : \n\n" << k <<"\n\n";
     //Rcout << "for the observation : \n\n" << i <<"\n\n";
     // NOTE : the scaling by bws is applied above
     // and we must now add the weight of the event
     // this weight can change according to the bw
 
-    for(int ii = 0; ii < bws_net.n_elem; ii++){
+    // Rcout << "Here are the weights in c++ : \n" <<  weights << "\n";
+
+    for(int ii = 0; ii < k.n_cols; ii++){
       k.col(ii) = k.col(ii) * weights(i,ii);
+      // Rcout << "applying weight : " << weights(i,ii) << "\n";
     }
 
     // if y was a selected event, its own weight must be set to 0 (if cvl == FALSE)
     // otherwise I must add to its own weight (if simple or discontinuous)
-    int index = get_first_index(sel_events_wid,wid);
+    int index = get_first_index_int(sel_events_wid,wid);
     if(index >= 0){
       if(cvl == false){
         k.row(index).fill(0.0);
       }else{
         if(method == "simple" || method == "discontinuous"){
-          for(int ii = 0; ii < bws_net.n_elem; ii++){
+          for(int ii = 0; ii < ibws.n_elem; ii++){
             //Rcout << "  Adding a bonus !"<<i<<"\n";
-            k(index,ii) = k(index,ii) + (kernel_func(0,bws_net(ii)) * (1/bws_net(ii)));
+            k(index,ii) = k(index,ii) + (kernel_func(0,ibws(ii)) * (1/ibws(ii)));
           }
         }
       }

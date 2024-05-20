@@ -17,7 +17,9 @@ calc_isochrones(
 \arguments{
 \item{lines}{A feature collection of lines representing the edges of the network}
 
-\item{dists}{A vector of the size of the desired isochrones}
+\item{dists}{A vector of the size of the desired isochrones. Can also be a list of vector
+when each start point must have its own distances. If so, the length of the list must be equal
+to the number of rows in start_points.}
 
 \item{start_points}{A feature collection of points representing the starting
 points if the isochrones}
@@ -44,8 +46,8 @@ directions (undirected). The values of the column must be "FT" (From - To),
 A feature collection of lines representing the isochrones with the
 following columns
 \itemize{
-        \item point_id: the index of the point at the centre of the isochrone;
-        \item distance: the size of the isochrone
+\item point_id: the index of the point at the centre of the isochrone;
+\item distance: the size of the isochrone
 }
 }
 \description{
@@ -80,12 +82,12 @@ wkt_lines <- c(
 linesdf <- data.frame(wkt = wkt_lines,
                       id = paste("l",1:length(wkt_lines),sep=""))
 
-lines <- st_as_sf(linesdf, wkt = "wkt")
+lines <- st_as_sf(linesdf, wkt = "wkt", crs = 32188)
 
 # and the definition of the starting point
 start_points <- data.frame(x=c(5),
                            y=c(-2.5))
-start_points <- st_as_sf(start_points, coords = c("x","y"))
+start_points <- st_as_sf(start_points, coords = c("x","y"), crs = 32188)
 
 # setting the directions
 

@@ -12,7 +12,7 @@
 
 <meta name="author" content="Jeremy Gelb" />
 
-<meta name="date" content="2023-08-22" />
+<meta name="date" content="2024-05-19" />
 
 <title>Spatial Weight Matrices</title>
 
@@ -340,7 +340,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Spatial Weight Matrices</h1>
 <h4 class="author">Jeremy Gelb</h4>
-<h4 class="date">2023-08-22</h4>
+<h4 class="date">2024-05-19</h4>
 
 
 <div id="TOC">
@@ -383,31 +383,31 @@ underestimation of the real distances between them</p>
 example here: calculating the Moran autocorrelation index for the number
 of bike accidents recorded on the Montreal road network in 2016.</p>
 <p>First, we want to load data:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="st">&quot;rgdal_show_exportToProj4_warnings&quot;</span><span class="ot">=</span><span class="st">&quot;none&quot;</span>)</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(spNetwork)</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(sf)</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(spdep)</span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">data</span>(mtl_network) </span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">data</span>(bike_accidents)</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">options</span>(<span class="st">&quot;rgdal_show_exportToProj4_warnings&quot;</span><span class="ot">=</span><span class="st">&quot;none&quot;</span>)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a><span class="fu">library</span>(spNetwork)</span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a><span class="fu">library</span>(sf)</span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a><span class="fu">library</span>(dplyr)</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a><span class="fu">library</span>(spdep)</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a><span class="fu">data</span>(mtl_network) </span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a><span class="fu">data</span>(bike_accidents)</span></code></pre></div>
 <p>then we want to split lines into lixels and calculate for each lixel
 the number of events on that lixel.</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>lixels <span class="ot">&lt;-</span> <span class="fu">lixelize_lines</span>(mtl_network,<span class="dv">200</span>,<span class="at">mindist =</span> <span class="dv">50</span>)</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co"># defining and oid for the lixels</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>lixels<span class="sc">$</span>oid <span class="ot">&lt;-</span> <span class="dv">1</span><span class="sc">:</span><span class="fu">nrow</span>(lixels)</span>
-<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co"># snapping the points on the lines and counting</span></span>
-<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>snapped_acc <span class="ot">&lt;-</span> <span class="fu">snapPointsToLines2</span>(bike_accidents,lixels, <span class="at">idField =</span><span class="st">&quot;oid&quot;</span>)</span>
-<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>counts <span class="ot">&lt;-</span> <span class="fu">table</span>(snapped_acc<span class="sc">$</span>nearest_line_id)</span>
-<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>counts_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="st">&quot;oid&quot;</span> <span class="ot">=</span> <span class="fu">as.numeric</span>(<span class="fu">as.character</span>(<span class="fu">names</span>(counts))),</span>
-<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>                        <span class="st">&quot;count&quot;</span> <span class="ot">=</span> <span class="fu">as.numeric</span>(counts))</span>
-<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="co"># merging the results</span></span>
-<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>lixels<span class="sc">$</span>nbAccident <span class="ot">&lt;-</span> <span class="fu">left_join</span>(lixels,counts_df, <span class="at">by=</span><span class="st">&quot;oid&quot;</span>)<span class="sc">$</span>count</span>
-<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>nbAccident <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(<span class="fu">is.na</span>(lixels<span class="sc">$</span>nbAccident),<span class="dv">0</span>,lixels<span class="sc">$</span>nbAccident)</span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>lixels <span class="ot">&lt;-</span> <span class="fu">lixelize_lines</span>(mtl_network,<span class="dv">200</span>,<span class="at">mindist =</span> <span class="dv">50</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="co"># defining and oid for the lixels</span></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>lixels<span class="sc">$</span>oid <span class="ot">&lt;-</span> <span class="dv">1</span><span class="sc">:</span><span class="fu">nrow</span>(lixels)</span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="co"># snapping the points on the lines and counting</span></span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>snapped_acc <span class="ot">&lt;-</span> <span class="fu">snapPointsToLines2</span>(bike_accidents,lixels, <span class="at">idField =</span><span class="st">&quot;oid&quot;</span>)</span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>counts <span class="ot">&lt;-</span> <span class="fu">table</span>(snapped_acc<span class="sc">$</span>nearest_line_id)</span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>counts_df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="st">&quot;oid&quot;</span> <span class="ot">=</span> <span class="fu">as.numeric</span>(<span class="fu">as.character</span>(<span class="fu">names</span>(counts))),</span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>                        <span class="st">&quot;count&quot;</span> <span class="ot">=</span> <span class="fu">as.numeric</span>(counts))</span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a></span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a><span class="co"># merging the results</span></span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a>lixels<span class="sc">$</span>nbAccident <span class="ot">&lt;-</span> <span class="fu">left_join</span>(lixels,counts_df, <span class="at">by=</span><span class="st">&quot;oid&quot;</span>)<span class="sc">$</span>count</span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a>nbAccident <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(<span class="fu">is.na</span>(lixels<span class="sc">$</span>nbAccident),<span class="dv">0</span>,lixels<span class="sc">$</span>nbAccident)</span></code></pre></div>
 <p>We use here the function <em>network_listw</em> the create a
 <code>listw</code> object representing the spatial weight matrix. The
 distances can be calculated from the centroids of the lixels, from the
@@ -417,63 +417,63 @@ use here the second approach and specify it with the parameter
 <p>Let us consider that above 300 metres two segments are not neighbours
 anymore, and convert the distances between the observations into spatial
 weights by using the inverse of the squared distance.</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>netlistw <span class="ot">&lt;-</span> <span class="fu">network_listw</span>(lixels,mtl_network,</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>                           <span class="at">method =</span> <span class="st">&quot;ends&quot;</span>,</span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>                           <span class="at">mindist =</span> <span class="dv">10</span>,</span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>                           <span class="at">maxdistance =</span> <span class="dv">300</span>,</span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>                           <span class="at">dist_func =</span> <span class="st">&quot;squared inverse&quot;</span>,</span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>                           <span class="at">line_weight =</span> <span class="st">&#39;length&#39;</span>,</span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>                           <span class="at">matrice_type =</span> <span class="st">&#39;W&#39;</span>,</span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>                           <span class="at">grid_shape =</span> <span class="fu">c</span>(<span class="dv">1</span>,<span class="dv">1</span>),</span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>                           <span class="at">verbose=</span><span class="cn">FALSE</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>netlistw <span class="ot">&lt;-</span> <span class="fu">network_listw</span>(lixels,mtl_network,</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>                           <span class="at">method =</span> <span class="st">&quot;ends&quot;</span>,</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a>                           <span class="at">mindist =</span> <span class="dv">10</span>,</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>                           <span class="at">maxdistance =</span> <span class="dv">300</span>,</span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a>                           <span class="at">dist_func =</span> <span class="st">&quot;squared inverse&quot;</span>,</span>
+<span id="cb3-6"><a href="#cb3-6" tabindex="-1"></a>                           <span class="at">line_weight =</span> <span class="st">&#39;length&#39;</span>,</span>
+<span id="cb3-7"><a href="#cb3-7" tabindex="-1"></a>                           <span class="at">matrice_type =</span> <span class="st">&#39;W&#39;</span>,</span>
+<span id="cb3-8"><a href="#cb3-8" tabindex="-1"></a>                           <span class="at">grid_shape =</span> <span class="fu">c</span>(<span class="dv">1</span>,<span class="dv">1</span>),</span>
+<span id="cb3-9"><a href="#cb3-9" tabindex="-1"></a>                           <span class="at">verbose=</span><span class="cn">FALSE</span>)</span></code></pre></div>
 <p>With that matrix, we can calculate the Moran I for the number of
 accidents on a lixel.</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>Test <span class="ot">&lt;-</span> <span class="fu">moran.test</span>(nbAccident, netlistw, <span class="at">zero.policy =</span> T)</span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(<span class="fu">round</span>(Test<span class="sc">$</span>estimate,<span class="dv">4</span>))</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt; Moran I statistic       Expectation          Variance </span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co">#&gt;            0.0511           -0.0003            0.0001</span></span></code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>Test <span class="ot">&lt;-</span> <span class="fu">moran.test</span>(nbAccident, netlistw, <span class="at">zero.policy =</span> T)</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="fu">print</span>(<span class="fu">round</span>(Test<span class="sc">$</span>estimate,<span class="dv">4</span>))</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a><span class="co">#&gt; Moran I statistic       Expectation          Variance </span></span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a><span class="co">#&gt;            0.0511           -0.0003            0.0001</span></span></code></pre></div>
 <p>The autocorrelation is weak, this is due to the large distance used
 and the fact that the analyzed variable is a counting variable (number
 of accidents). Indeed, the Moran I is supposed to be used on continuous
 variables.</p>
 <p>One could go further and define its own function to convert distances
 into spatial weights</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>my_conv_func <span class="ot">&lt;-</span> <span class="cf">function</span>(x){</span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (x<span class="sc">&gt;=</span><span class="dv">300</span>){</span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">return</span>(<span class="dv">0</span>)</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  }<span class="cf">else</span>{</span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">return</span>(<span class="dv">1</span><span class="sc">/</span>x<span class="sc">**</span><span class="dv">3</span>)</span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>netlistw2 <span class="ot">&lt;-</span> <span class="fu">network_listw</span>(lixels,mtl_network,</span>
-<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>                             <span class="at">method =</span> <span class="st">&quot;ends&quot;</span>,</span>
-<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>                             <span class="at">mindist =</span> <span class="dv">10</span>,</span>
-<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>                             <span class="at">maxdistance =</span> <span class="dv">300</span>,</span>
-<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>                             <span class="at">dist_func =</span> my_conv_func,</span>
-<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>                             <span class="at">line_weight =</span> <span class="st">&#39;length&#39;</span>,</span>
-<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>                             <span class="at">matrice_type =</span> <span class="st">&#39;W&#39;</span>,</span>
-<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>                             <span class="at">grid_shape =</span> <span class="fu">c</span>(<span class="dv">1</span>,<span class="dv">1</span>),</span>
-<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>                             <span class="at">verbose=</span><span class="cn">FALSE</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>my_conv_func <span class="ot">&lt;-</span> <span class="cf">function</span>(x){</span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>  <span class="cf">if</span> (x<span class="sc">&gt;=</span><span class="dv">300</span>){</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a>    <span class="fu">return</span>(<span class="dv">0</span>)</span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a>  }<span class="cf">else</span>{</span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>    <span class="fu">return</span>(<span class="dv">1</span><span class="sc">/</span>x<span class="sc">**</span><span class="dv">3</span>)</span>
+<span id="cb5-6"><a href="#cb5-6" tabindex="-1"></a>  }</span>
+<span id="cb5-7"><a href="#cb5-7" tabindex="-1"></a>}</span>
+<span id="cb5-8"><a href="#cb5-8" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" tabindex="-1"></a>netlistw2 <span class="ot">&lt;-</span> <span class="fu">network_listw</span>(lixels,mtl_network,</span>
+<span id="cb5-10"><a href="#cb5-10" tabindex="-1"></a>                             <span class="at">method =</span> <span class="st">&quot;ends&quot;</span>,</span>
+<span id="cb5-11"><a href="#cb5-11" tabindex="-1"></a>                             <span class="at">mindist =</span> <span class="dv">10</span>,</span>
+<span id="cb5-12"><a href="#cb5-12" tabindex="-1"></a>                             <span class="at">maxdistance =</span> <span class="dv">300</span>,</span>
+<span id="cb5-13"><a href="#cb5-13" tabindex="-1"></a>                             <span class="at">dist_func =</span> my_conv_func,</span>
+<span id="cb5-14"><a href="#cb5-14" tabindex="-1"></a>                             <span class="at">line_weight =</span> <span class="st">&#39;length&#39;</span>,</span>
+<span id="cb5-15"><a href="#cb5-15" tabindex="-1"></a>                             <span class="at">matrice_type =</span> <span class="st">&#39;W&#39;</span>,</span>
+<span id="cb5-16"><a href="#cb5-16" tabindex="-1"></a>                             <span class="at">grid_shape =</span> <span class="fu">c</span>(<span class="dv">1</span>,<span class="dv">1</span>),</span>
+<span id="cb5-17"><a href="#cb5-17" tabindex="-1"></a>                             <span class="at">verbose=</span><span class="cn">FALSE</span>)</span></code></pre></div>
 <p>To speed up calculation, one could use a multiprocessing plan defined
 with the package ‘future’. To do so, the study area is divided into
 rectangles (according to the parameter <em>grid_shape</em>), and each
 rectangle is treated separately. A buffer is applied around the
 rectangles to avoid edge effects.</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># setting the multiprocess plan</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>future<span class="sc">::</span><span class="fu">plan</span>(future<span class="sc">::</span><span class="fu">multisession</span>(<span class="at">workers=</span><span class="dv">2</span>))</span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>netlistw3 <span class="ot">&lt;-</span> <span class="fu">network_listw.mc</span>(lixels,lixels,</span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>                             <span class="at">method =</span> <span class="st">&quot;ends&quot;</span>,</span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>                             <span class="at">mindist =</span> <span class="dv">10</span>,</span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>                             <span class="at">maxdistance =</span> <span class="dv">300</span>,</span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>                             <span class="at">dist_func =</span> my_conv_func,</span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>                             <span class="at">line_weight =</span> <span class="st">&#39;length&#39;</span>,</span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>                             <span class="at">matrice_type =</span> <span class="st">&#39;W&#39;</span>,</span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>                             <span class="at">grid_shape =</span> <span class="fu">c</span>(<span class="dv">2</span>,<span class="dv">2</span>),</span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>                             <span class="at">verbose=</span><span class="cn">FALSE</span>)</span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">inherits</span>(future<span class="sc">::</span><span class="fu">plan</span>(), <span class="st">&quot;sequential&quot;</span>)) future<span class="sc">::</span><span class="fu">plan</span>(future<span class="sc">::</span>sequential)</span></code></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" tabindex="-1"></a><span class="co"># setting the multiprocess plan</span></span>
+<span id="cb6-2"><a href="#cb6-2" tabindex="-1"></a>future<span class="sc">::</span><span class="fu">plan</span>(future<span class="sc">::</span><span class="fu">multisession</span>(<span class="at">workers=</span><span class="dv">2</span>))</span>
+<span id="cb6-3"><a href="#cb6-3" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" tabindex="-1"></a>netlistw3 <span class="ot">&lt;-</span> <span class="fu">network_listw.mc</span>(lixels,lixels,</span>
+<span id="cb6-5"><a href="#cb6-5" tabindex="-1"></a>                             <span class="at">method =</span> <span class="st">&quot;ends&quot;</span>,</span>
+<span id="cb6-6"><a href="#cb6-6" tabindex="-1"></a>                             <span class="at">mindist =</span> <span class="dv">10</span>,</span>
+<span id="cb6-7"><a href="#cb6-7" tabindex="-1"></a>                             <span class="at">maxdistance =</span> <span class="dv">300</span>,</span>
+<span id="cb6-8"><a href="#cb6-8" tabindex="-1"></a>                             <span class="at">dist_func =</span> my_conv_func,</span>
+<span id="cb6-9"><a href="#cb6-9" tabindex="-1"></a>                             <span class="at">line_weight =</span> <span class="st">&#39;length&#39;</span>,</span>
+<span id="cb6-10"><a href="#cb6-10" tabindex="-1"></a>                             <span class="at">matrice_type =</span> <span class="st">&#39;W&#39;</span>,</span>
+<span id="cb6-11"><a href="#cb6-11" tabindex="-1"></a>                             <span class="at">grid_shape =</span> <span class="fu">c</span>(<span class="dv">2</span>,<span class="dv">2</span>),</span>
+<span id="cb6-12"><a href="#cb6-12" tabindex="-1"></a>                             <span class="at">verbose=</span><span class="cn">FALSE</span>)</span>
+<span id="cb6-13"><a href="#cb6-13" tabindex="-1"></a></span>
+<span id="cb6-14"><a href="#cb6-14" tabindex="-1"></a><span class="cf">if</span> (<span class="sc">!</span><span class="fu">inherits</span>(future<span class="sc">::</span><span class="fu">plan</span>(), <span class="st">&quot;sequential&quot;</span>)) future<span class="sc">::</span><span class="fu">plan</span>(future<span class="sc">::</span>sequential)</span></code></pre></div>
 </div>
 <div id="other-features" class="section level1">
 <h1>Other features</h1>

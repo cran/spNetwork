@@ -18,20 +18,20 @@
 //' @param bw the kernel bandiwdth
 //' @param line_weights a vector with the length of the edges
 //' @param samples_edgeid a vector associating each sample to an edge
-//' @param samples_x a vector with x coordinates of each sample
-//' @param samples_ya vector with y coordinates of each sample
-//' @param nodes_x a vector with x coordinates of each node
-//' @param nodes_y a vector with y coordinates of each node
+//' @param samples_coords a matrix with the X and Y coordinates of the samples
+//' @param nodes_coords a matrix with the X and Y coordinates of the nodes
 //' @param depth the actual recursion depth
 //' @param max_depth the maximum recursion depth
 //' @return a vector with the kernel values calculated for each samples from
 //' the first node given
 //' @keywords internal
-arma::vec esd_kernel_rcpp_arma_sparse(fptr kernel_func, arma::sp_mat& edge_mat,
-                                      List& neighbour_list ,int v, double bw,
-                                      arma::vec& line_weights, arma::vec& samples_edgeid,
-                                      arma::vec& samples_x, arma::vec& samples_y,
-                                      arma::vec& nodes_x, arma::vec& nodes_y, int depth, int max_depth){
+arma::vec esd_kernel_rcpp_arma_sparse(fptr kernel_func, arma::sp_imat &edge_mat,
+                                      List &neighbour_list ,int v, double bw,
+                                      arma::vec &line_weights,
+                                      arma::ivec &samples_edgeid,
+                                      arma::mat &samples_coords,
+                                      arma::mat &nodes_coords,
+                                      int depth, int max_depth){
   //step0 : generate the queue
   //queue <List> data_holder;
 
@@ -45,89 +45,71 @@ arma::vec esd_kernel_rcpp_arma_sparse(fptr kernel_func, arma::sp_mat& edge_mat,
 
   std::vector<acase> data_holder;
 
-  arma::vec samples_k(samples_x.n_elem);
+  arma::vec samples_k(samples_edgeid.n_elem);
   samples_k.fill(0.0);
   //step1 : generate the first case
   acase cas1 = {0.0,1.0,v,-999,0};
-
   data_holder.push_back(cas1);
+
+  int new_depth;
+  int cnt_n;
+  double new_alpha;
+
   //lancement des iterations
   while(data_holder.empty()==FALSE){
     //unpacking (imagine some loop unrolling here with a function to deal with.)
     acase cas = data_holder.back();
     data_holder.pop_back();
 
-    int v = cas.v;
-    int depth = cas.depth;
-    double d = cas.d;
-    double alpha = cas.alpha;
-    int prev_node = cas.prev_node;
-
-    // int v = cas["v"];
-    // int depth = cas["depth"];
-    // double d = cas["d"];
-    // double alpha = cas["alpha"];
-    // int prev_node = cas["prev_node"];
 
     //step1 : find all the neighbours
-    IntegerVector neighbours = neighbour_list[v-1];
+    IntegerVector neighbours = neighbour_list[cas.v-1];
 
     //step2 : iterate over the neighbours
-    int cnt_n = neighbours.length();
-    int new_depth;
+    cnt_n = neighbours.length();
     if(cnt_n>2){
-      new_depth = depth+1;
+      new_depth = cas.depth+1;
     }else{
-      new_depth = depth;
+      new_depth = cas.depth;
     }
 
-    double new_alpha;
-    if((prev_node < 0)  && (cnt_n > 2)){
+    if((cas.prev_node < 0)  && (cnt_n > 2)){
       new_alpha = 2.0/(cnt_n);
-    }else if((prev_node < 0)  && (cnt_n == 1)){
+    }else if((cas.prev_node < 0)  && (cnt_n == 1)){
       new_alpha = 1;
     }else{
-      new_alpha = alpha * (1.0/(cnt_n-1.0));
+      new_alpha = cas.alpha * (1.0/(cnt_n-1.0));
     }
 
     //if we have only one neighbour, we must stop
-    if(cnt_n>1 or prev_node<=0){
+    if(cnt_n>1 or cas.prev_node<=0){
       for(int i=0; i < cnt_n; ++i){
         int v2 = neighbours[i];
         //on ne veut pas revenir en arriere !
-        if(v2!=prev_node){
+        if(v2!=cas.prev_node){
           //find the edge between the two nodes
-          int edge_id = edge_mat(v,v2);
+          int edge_id = edge_mat(cas.v,v2);
           //find the samples on that edge
           arma::uvec test = arma::find(samples_edgeid==edge_id);
-          arma::vec sampling_x = samples_x.elem(test);
-          arma::vec sampling_y = samples_y.elem(test);
+
+          arma::mat sampling_coords = samples_coords.rows(test);
+
 
           //extracting the X and Y coordinates of the starting node
-          int v_m1 = v-1;
-          double node_x = nodes_x[v_m1];
-          double node_y = nodes_y[v_m1];
 
-          //calculating the distances
-          arma::vec x_dists = arma::sqrt(arma::pow((sampling_x - node_x),2) + arma::pow((sampling_y - node_y),2)) + d;
+          arma::colvec x_dists =  arma::sqrt(arma::sum(arma::pow(sampling_coords.each_row() - nodes_coords.row((cas.v - 1)),2),1)) + cas.d;
 
           //step3 calculating the values of the new kernel
           arma::vec new_k = kernel_func(x_dists,bw)*new_alpha;
           samples_k.elem(test) += new_k;
 
           //evaluating for the next move
-          double d2 = line_weights[edge_id-1] + d;
+          double d2 = line_weights[edge_id-1] + cas.d;
 
           if (d2<bw and new_depth<max_depth){
-            // List new_cas = List::create(Named("d")=d2,
-            //                             Named("alpha")=new_alpha,
-            //                             Named("v") = v2,
-            //                             Named("prev_node") = v,
-            //                             Named("depth") = new_depth
-            // );
-            acase new_cas = {d2,new_alpha,v2,v,new_depth};
-            //data_holder.push(new_cas);
-            data_holder.push_back(new_cas);
+            // acase new_cas = {d2,new_alpha,v2,v,new_depth};
+            //data_holder.push_back(new_cas);
+            data_holder.push_back((struct acase){d2,new_alpha,v2,cas.v,new_depth});
           }
         }
       }
@@ -286,23 +268,30 @@ DataFrame discontinuous_nkde_cpp_arma_sparse(List neighbour_list, NumericVector 
 
   //step0 extract the columns of the dataframe
   arma::vec line_weights =  as<arma::vec>(line_list["weight"]);
-  arma::vec samples_edgeid = as<arma::vec>(samples["edge_id"]);
-  arma::vec samples_x = as<arma::vec>(samples["X_coords"]);
-  arma::vec samples_y = as<arma::vec>(samples["Y_coords"]);
-  arma::vec nodes_x = as<arma::vec>(nodes["X_coords"]);
-  arma::vec nodes_y = as<arma::vec>(nodes["Y_coords"]);
+  arma::ivec samples_edgeid = as<arma::ivec>(samples["edge_id"]);
+
+
+  arma::mat samples_coords(samples.nrows(),2);
+  samples_coords.col(0) = as<arma::vec>(samples["X_coords"]);
+  samples_coords.col(1) = as<arma::vec>(samples["Y_coords"]);
+
+  arma::mat nodes_coords(nodes.nrows(),2);
+  nodes_coords.col(0) = as<arma::vec>(nodes["X_coords"]);
+  nodes_coords.col(1) = as<arma::vec>(nodes["Y_coords"]);
+
   //step 1 : mettre toutes les valeurs a 0
-  arma::vec base_k(samples_x.n_elem);
-  arma::vec base_count(samples_x.n_elem);
-  arma::vec count(samples_x.n_elem);
+  arma::vec base_k(samples.nrow());
+  arma::vec base_count(samples.nrow());
+  arma::vec count(samples.nrow());
+
   // base_k.fill(0.0);
   // base_count.fill(0.0);
   // count.fill(0.0);
 
 
   //calculer la matrice des lignes
-  //IntegerMatrix edge_mat = make_matrix(line_list,neighbour_list);
-  arma::sp_mat edge_mat = make_matrix_sparse(line_list,neighbour_list);
+  //arma::sp_mat edge_mat = make_matrix_sparse(line_list,neighbour_list);
+  arma::sp_imat edge_mat = make_imatrix_sparse(line_list, neighbour_list);
   int depth = 0;
 
   //step2 : iterer sur chaque event
@@ -316,7 +305,7 @@ DataFrame discontinuous_nkde_cpp_arma_sparse(List neighbour_list, NumericVector 
     double bw = bws[i];
     // launching recursion
     //NumericVector k = esd_kernel_rcpp(samples_k, edge_dict, neighbour_list ,y,prev_node,d,alpha,bw,kernel_func, line_weights, samples_edgeid, samples_x, samples_y, samples_oid, nodes_x, nodes_y, depth,max_depth);
-    arma::vec k = esd_kernel_rcpp_arma_sparse(kernel_func,edge_mat, neighbour_list ,y, bw, line_weights, samples_edgeid, samples_x, samples_y, nodes_x, nodes_y, depth,max_depth);
+    arma::vec k = esd_kernel_rcpp_arma_sparse(kernel_func,edge_mat, neighbour_list ,y, bw, line_weights, samples_edgeid, samples_coords, nodes_coords, depth,max_depth);
     // getting the actual base_k values (summed at each iteration)
     if(div == "bw"){
       base_k += ((k*w))/bw;
@@ -451,17 +440,21 @@ List discontinuous_tnkde_cpp_arma_sparse(List neighbour_list,
 
   //step0 extract the columns of the dataframe
   arma::vec line_weights =  as<arma::vec>(line_list["weight"]);
-  arma::vec samples_edgeid = as<arma::vec>(samples["edge_id"]);
-  arma::vec samples_x = as<arma::vec>(samples["X_coords"]);
-  arma::vec samples_y = as<arma::vec>(samples["Y_coords"]);
-  arma::vec nodes_x = as<arma::vec>(nodes["X_coords"]);
-  arma::vec nodes_y = as<arma::vec>(nodes["Y_coords"]);
+  arma::ivec samples_edgeid = as<arma::ivec>(samples["edge_id"]);
+
+  arma::mat samples_coords(samples.nrows(),2);
+  samples_coords.col(0) = as<arma::vec>(samples["X_coords"]);
+  samples_coords.col(1) = as<arma::vec>(samples["Y_coords"]);
+
+  arma::mat nodes_coords(nodes.nrows(),2);
+  nodes_coords.col(0) = as<arma::vec>(nodes["X_coords"]);
+  nodes_coords.col(1) = as<arma::vec>(nodes["Y_coords"]);
 
   //step 1 : set all values to 0
   // NOTE : we will produce matrices here (tnkde)
-  arma::mat base_k(samples_x.n_elem, samples_time.n_elem);
-  arma::mat base_count(samples_x.n_elem, samples_time.n_elem);
-  arma::mat count(samples_x.n_elem, samples_time.n_elem);
+  arma::mat base_k(samples.nrows(), samples_time.n_elem);
+  arma::mat base_count(samples.nrows(), samples_time.n_elem);
+  arma::mat count(samples.nrows(), samples_time.n_elem);
 
   // NOTE It is possible that we must recalculate the density for the same vertex
   // we will store them instead
@@ -469,8 +462,8 @@ List discontinuous_tnkde_cpp_arma_sparse(List neighbour_list,
   std::map<int, arma::vec> saved_values;
 
   //calculer la matrice des lignes
-  //IntegerMatrix edge_mat = make_matrix(line_list,neighbour_list);
-  arma::sp_mat edge_mat = make_matrix_sparse(line_list,neighbour_list);
+  //arma::sp_mat edge_mat = make_matrix_sparse(line_list,neighbour_list);
+  arma::sp_imat edge_mat = make_imatrix_sparse(line_list, neighbour_list);
   int depth = 0;
   //step2 : iterer sur chaque event
   int cnt_e = events.length()-1;
@@ -492,12 +485,12 @@ List discontinuous_tnkde_cpp_arma_sparse(List neighbour_list,
         k = saved_values[y];
       }else{
         // we have not yet the value
-        k = esd_kernel_rcpp_arma_sparse(kernel_func,edge_mat, neighbour_list ,y,bw_net, line_weights, samples_edgeid, samples_x, samples_y, nodes_x, nodes_y, depth,max_depth);
+        k = esd_kernel_rcpp_arma_sparse(kernel_func,edge_mat, neighbour_list ,y,bw_net, line_weights, samples_edgeid, samples_coords, nodes_coords, depth,max_depth);
         saved_values[y] = k;
       }
     }else{
       // this is not a duplicate event, no need to store the value in memory
-      k = esd_kernel_rcpp_arma_sparse(kernel_func,edge_mat, neighbour_list ,y, bw_net, line_weights, samples_edgeid, samples_x, samples_y, nodes_x, nodes_y, depth,max_depth);
+      k = esd_kernel_rcpp_arma_sparse(kernel_func,edge_mat, neighbour_list ,y, bw_net, line_weights, samples_edgeid, samples_coords, nodes_coords, depth,max_depth);
     }
     // ok, now we must calculate the temporal densities
     arma::vec temporal_density = kernel_func(arma::abs(samples_time - et), bw_time);
@@ -509,7 +502,7 @@ List discontinuous_tnkde_cpp_arma_sparse(List neighbour_list,
     }
 
     // and create an awesome spatio-temporal matrix
-    arma::mat k_mat(samples_x.n_elem, samples_time.n_elem);
+    arma::mat k_mat(samples.nrows(), samples_time.n_elem);
 
     for(int j = 0; j < temporal_density.n_elem; j++){
       k_mat.col(j) = k * temporal_density[j];

@@ -126,14 +126,14 @@ tm_shape(sample_points) +
 
 ## ----message=FALSE, warning=FALSE, eval = FALSE-------------------------------
 #  cv_scores <- bw_tnkde_cv_likelihood_calc(
-#    bw_net_range = c(100,1000),
+#    bw_net_range = c(200,1100),
 #    bw_net_step = 100,
-#    bw_time_range = c(10,60),
+#    bw_time_range = c(10,70),
 #    bw_time_step = 10,
 #    lines = mtl_network,
 #    events = bike_accidents,
 #    time_field = "Time",
-#    w = rep(1, length(bike_accidents)),
+#    w = rep(1, nrow(bike_accidents)),
 #    kernel_name = "quartic",
 #    method = "discontinuous",
 #    diggle_correction = FALSE,
@@ -141,12 +141,13 @@ tm_shape(sample_points) +
 #    max_depth = 10,
 #    digits = 2,
 #    tol = 0.1,
-#    agg = 15,
+#    agg = 10,
 #    sparse=TRUE,
 #    grid_shape=c(1,1),
 #    sub_sample=1,
 #    verbose = FALSE,
 #    check = TRUE)
+#  
 
 ## ----message=FALSE, warning=FALSE---------------------------------------------
 knitr::kable(cv_scores)
@@ -200,6 +201,58 @@ knitr::kable(cv_scores)
 knitr::include_graphics("images/animated_map.gif")
 
 ## ----message=FALSE, warning=FALSE, eval = FALSE-------------------------------
+#  cv_scores_adpt_dis <- bw_tnkde_cv_likelihood_calc(
+#    bws_net = seq(200,1100,100),
+#    bws_time = seq(10,70,10),
+#    lines = mtl_network,
+#    events = bike_accidents,
+#    time_field = "Time",
+#    adaptive = TRUE,
+#    trim_net_bws = seq(200,1100,100)*2,
+#    trim_time_bws = seq(10,70,10)*2,
+#    w = rep(1, nrow(bike_accidents)),
+#    kernel_name = "quartic",
+#    method = "discontinuous",
+#    diggle_correction = FALSE,
+#    study_area = NULL,
+#    max_depth = 10,
+#    digits = 2,
+#    tol = 0.1,
+#    agg = 15,
+#    sparse=TRUE,
+#    grid_shape=c(1,1),
+#    sub_sample=1,
+#    verbose = FALSE,
+#    check = TRUE)
+#  
+#  cv_scores_adpt_cont <- bw_tnkde_cv_likelihood_calc.mc(
+#    bws_net = seq(200,1100,100),
+#    bws_time = seq(10,70,10),
+#    lines = mtl_network,
+#    events = bike_accidents,
+#    time_field = "Time",
+#    adaptive = TRUE,
+#    trim_net_bws = seq(200,1100,100)*2,
+#    trim_time_bws = seq(10,70,10)*2,
+#    w = rep(1, nrow(bike_accidents)),
+#    kernel_name = "quartic",
+#    method = "continuous",
+#    diggle_correction = FALSE,
+#    study_area = NULL,
+#    max_depth = 10,
+#    digits = 2,
+#    tol = 0.1,
+#    agg = 15,
+#    sparse=TRUE,
+#    grid_shape=c(2,2),
+#    sub_sample=1,
+#    verbose = FALSE,
+#    check = TRUE)
+
+## ----message=FALSE, warning=FALSE---------------------------------------------
+knitr::kable(cv_scores_adpt_cont)
+
+## ----message=FALSE, warning=FALSE, eval = FALSE-------------------------------
 #  tnkde_densities <- tnkde(lines = mtl_network,
 #                     events = bike_accidents,
 #                     time_field = "Time",
@@ -207,10 +260,10 @@ knitr::include_graphics("images/animated_map.gif")
 #                     samples_loc = sample_points,
 #                     samples_time = sample_time,
 #                     kernel_name = "quartic",
-#                     bw_net = 700, bw_time = 60,
+#                     bw_net = 800, bw_time = 60,
 #                     adaptive = TRUE,
 #                     adaptive_separate = FALSE,
-#                     trim_bw_net = 900,
+#                     trim_bw_net = 1000,
 #                     trim_bw_time = 80,
 #                     method = "discontinuous",
 #                     div = "bw", max_depth = 10,
