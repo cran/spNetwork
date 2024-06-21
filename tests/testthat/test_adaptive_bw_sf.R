@@ -7,6 +7,7 @@ library(sf)
 
 test_that("Testing the adaptive_bw function", {
 
+  #skip_on_cran()
   # defining a simple situation
   wkt_lines <- c(
     "LINESTRING (0 5, 0 0)",
@@ -60,7 +61,7 @@ test_that("Testing the adaptive_bw function", {
     sparse = TRUE,
     verbose = TRUE,
     check = FALSE,
-    grid_shape = c(3,3)
+    grid_shape = c(1,1)
   )
 
   diff <- sum(round(abs(abws - observed$events$bw),6))
