@@ -32,6 +32,119 @@ select_dist_function <- function(dist_func = "inverse") {
 #defining some global variables (weird felx but ok)
 utils::globalVariables(c("origin", "fid"))
 
+
+# network_listw_worker_old <- function(points,lines,maxdistance,dist_func, direction=NULL, mindist=10, matrice_type = "B", verbose = FALSE, digits = 3, tol=0.1){
+#     ## step1 : adding the points to the lines
+#     lines$worker_id <- 1:nrow(lines)
+#     points$nearest_line_id <- as.numeric(as.character(points$nearest_line_id))
+#     joined <- data.table(st_drop_geometry(points))
+#     B <- data.table(st_drop_geometry(lines))
+#     joined[B,  on = c("nearest_line_id" = "tmpid"),
+#            names(B) := mget(paste0("i.", names(B)))]
+#
+#     if(verbose){
+#         print("adding the points as vertices to nearest lines")
+#     }
+#     # in the previous version, we split all the lines at their vertex
+#     # however, this is not required here, we could just split them
+#     # at points added in the network
+#     # new_lines <- add_vertices_lines(lines, points, joined$worker_id, 1)
+#     graph_lines <- split_lines_at_vertex(lines, points, joined$worker_id, 1)
+#
+#     ## step2 : splitting the lines on vertices and adjusting weights
+#     if(verbose){
+#         print("splitting the lines for the network")
+#     }
+#     #graph_lines <- simple_lines(new_lines)
+#     graph_lines$lx_length <- as.numeric(sf::st_length(graph_lines))
+#     graph_lines$lx_weight <- (graph_lines$lx_length / graph_lines$line_length) * graph_lines$line_weight
+#
+#     ## step3 building the network
+#     if(verbose){
+#         print("generating the network")
+#     }
+#     if (is.null(direction)){
+#         result_graph <- build_graph(graph_lines, digits = digits,
+#                                     attrs = TRUE, line_weight = "lx_weight")
+#     }else{
+#         #dir <- ifelse(graph_lines[[direction]]=="Both",0,1)
+#         result_graph <- build_graph_directed(graph_lines, digits = digits,
+#                                     attrs = TRUE, line_weight='lx_weight',
+#                                     direction = direction)
+#     }
+#     ## step4 finding for each point its corresponding vertex
+#     points$vertex <- closest_points(points,result_graph$spvertices)
+#     if(verbose){
+#         print("calculating the distances on the network")
+#     }
+#     starts <- subset(points,points$pttype=="start")
+#     u <- unique(points$vertex)
+#
+#     ## step 4 calculating the distances between the start and end points
+#     base_distances <- igraph::distances(result_graph$graph,
+#                                         v = starts$vertex, to = u,
+#                                         mode = "out")
+#     all_ditancesdt <- data.table(base_distances)
+#     all_ditancesdt$origin <- starts$fid
+#
+#     ## step 5 extracting the distances as a dataframe rather than a matrix
+#
+#     #first groupby on rows :
+#     #multiple rows might correspond to the same object (if multiple points like)
+#     step1 <- all_ditancesdt[, lapply(.SD, min, na.rm = TRUE), by = origin ]
+#     originid <- step1$origin
+#
+#     #then transpose and merge
+#     step2 <- transpose(step1[,2:ncol(step1)])
+#     step2$vertex <- u
+#     pts <- data.table(st_drop_geometry(points[c("fid","vertex")]))
+#     step2.5 <- data.table::merge.data.table(step2,pts,by="vertex",all=TRUE)
+#     colorder <- c(2:(ncol(step2.5)-1),1,ncol(step2.5))
+#     step2.5 <- data.table::setcolorder(step2.5,colorder)
+#
+#     step3 <- step2.5[, lapply(.SD, min, na.rm=TRUE), by=fid ]
+#     destid <- step3$fid
+#     #transpose again
+#     step4 <- transpose(step3)
+#     dist_matrix <- as.matrix(step4[2:(nrow(step4)-1)])
+#     dist_matrix <- ifelse(is.na(dist_matrix),Inf,dist_matrix)
+#     rownames(dist_matrix) <- originid
+#     colnames(dist_matrix) <- destid
+#
+#     ##step 6 finaly generate the neighbouring object with the data
+#     nblist <- lapply(1:nrow(dist_matrix),function(i){
+#         row <- dist_matrix[i,]
+#         iid <- originid[i]
+#         test <- row<=maxdistance & destid!=iid
+#         if(any(test)){
+#             nbs <- destid[test]
+#             okdistances <- row[test]
+#             okdistances <- ifelse(okdistances==0,mindist,okdistances)
+#             weights <- dist_func(okdistances)
+#             if(matrice_type=="B"){
+#                 wtdweights <- rep(1,length(nbs))
+#             }else if (matrice_type=="W"){
+#                 wtdweights <- weights/sum(weights)
+#             }else if (matrice_type == "I"){
+#               wtdweights <- weights
+#             }
+#             return(list(nbs,as.numeric(wtdweights)))
+#         }else{
+#             return(list(0L, NULL))
+#         }
+#     })
+#     nbs <- lapply(1:length(nblist), function(j) {
+#         nblist[[j]][[1]]
+#     })
+#     names(nbs) <- originid
+#     weights <- lapply(1:length(nblist), function(j) {
+#         nblist[[j]][[2]]
+#     })
+#     names(weights) <- originid
+#     return(list(nbs, weights))
+# }
+
+
 #' @title network_listw worker
 #'
 #' @description The worker function of network_listw.
@@ -67,116 +180,155 @@ utils::globalVariables(c("origin", "fid"))
 #' @examples
 #' #no example provided, this is an internal function
 network_listw_worker<-function(points,lines,maxdistance,dist_func, direction=NULL, mindist=10, matrice_type = "B", verbose = FALSE, digits = 3, tol=0.1){
-    ## step1 : adding the points to the lines
-    lines$worker_id <- 1:nrow(lines)
-    points$nearest_line_id <- as.numeric(as.character(points$nearest_line_id))
-    joined <- data.table(st_drop_geometry(points))
-    B <- data.table(st_drop_geometry(lines))
-    joined[B,  on = c("nearest_line_id" = "tmpid"),
-           names(B) := mget(paste0("i.", names(B)))]
 
-    if(verbose){
-        print("adding the points as vertices to nearest lines")
-    }
-    # in the previous version, we split all the lines at their vertex
-    # however, this is not required here, we could just split them
-    # at points added in the network
-    # new_lines <- add_vertices_lines(lines, points, joined$worker_id, 1)
-    graph_lines <- split_lines_at_vertex(lines, points, joined$worker_id, 1)
+  ## step1 : adding the points to the lines
+  lines$worker_id <- 1:nrow(lines)
+  points$nearest_line_id <- as.numeric(as.character(points$nearest_line_id))
 
-    ## step2 : splitting the lines on vertices and adjusting weights
-    if(verbose){
-        print("splitting the lines for the network")
-    }
-    #graph_lines <- simple_lines(new_lines)
-    graph_lines$lx_length <- as.numeric(sf::st_length(graph_lines))
-    graph_lines$lx_weight <- (graph_lines$lx_length / graph_lines$line_length) * graph_lines$line_weight
+  joined <- data.table(st_drop_geometry(points))
+  B <- data.table(st_drop_geometry(lines))
+  joined[B,  on = c("nearest_line_id" = "tmpid"),
+         names(B) := mget(paste0("i.", names(B)))]
 
-    ## step3 building the network
-    if(verbose){
-        print("generating the network")
-    }
-    if (is.null(direction)){
-        result_graph <- build_graph(graph_lines, digits = digits,
-                                    attrs = TRUE, line_weight = "lx_weight")
+  if(verbose){
+    print("adding the points as vertices to nearest lines")
+  }
+  # in the previous version, we split all the lines at their vertex
+  # however, this is not required here, we could just split them
+  # at points added in the network
+  # new_lines <- add_vertices_lines(lines, points, joined$worker_id, 1)
+  graph_lines <- split_lines_at_vertex(lines, points, joined$worker_id, mindist = mindist)
+
+  ## step2 : splitting the lines on vertices and adjusting weights
+  if(verbose){
+    print("splitting the lines for the network")
+  }
+  #graph_lines <- simple_lines(new_lines)
+  graph_lines$lx_length <- as.numeric(sf::st_length(graph_lines))
+  graph_lines$lx_weight <- (graph_lines$lx_length / graph_lines$line_length) * graph_lines$line_weight
+
+  ## step3 building the network
+  if(verbose){
+    print("generating the network")
+  }
+
+  result_graph <- build_graph_cppr(graph_lines,
+                                   digits = digits,
+                                   attrs = TRUE,
+                                   line_weight = "lx_weight",
+                                   direction = direction)
+
+
+  ## step4 finding for each point its corresponding vertex
+  points$vertex <- closest_points(points,result_graph$spvertices)
+  points$graph_ref <- result_graph$spvertices$ref[points$vertex]
+  points$id_order <- 1:nrow(points)
+
+  if(verbose){
+    print("calculating the distances on the network")
+  }
+  starts <- subset(points,points$pttype=="start")
+
+  ## step 4 calculating the distances between the start and end points
+  base_distances <- cppRouting::get_distance_matrix(result_graph$graph, from = starts$graph_ref, to = points$graph_ref)
+
+  base_distances[is.na(base_distances)] <- maxdistance + 1
+
+  colnames(base_distances) <- points$fid
+  all_ditancesdt <- data.table(base_distances)
+  all_ditancesdt$origin <- starts$fid
+
+  # we generate a long format for the distance matrix
+  all_ditancesdt_long <- data.table::melt(all_ditancesdt, id.vars = c("origin"))
+
+  # and then we can find between each feature the shortest path
+  ok_distances <- all_ditancesdt_long[, lapply(.SD, min, na.rm = TRUE), by = c('origin', 'variable') ]
+  names(ok_distances) <- c('origin', 'destination','dist')
+
+  dist_matrix <- data.table::dcast(ok_distances, origin ~ destination, value.var = 'dist')
+  originid <- as.integer(dist_matrix$origin)
+  dist_matrix$origin <- NULL
+  destid <- as.integer(colnames(dist_matrix))
+  dist_matrix <- as.matrix(dist_matrix)
+
+  ##step 6 finaly generate the neighbouring object with the data
+  nblist <- lapply(1:nrow(dist_matrix),function(i){
+    row <- dist_matrix[i,]
+    iid <- originid[i]
+    test <- row<=maxdistance & destid!=iid
+    if(any(test)){
+      nbs <- destid[test]
+      okdistances <- row[test]
+      okdistances <- ifelse(okdistances==0,mindist,okdistances)
+      weights <- dist_func(okdistances)
+      if(matrice_type=="B"){
+        wtdweights <- rep(1,length(nbs))
+      }else if (matrice_type=="W"){
+        wtdweights <- weights/sum(weights)
+      }else if (matrice_type == "I"){
+        wtdweights <- weights
+      }
+      return(list(nbs,as.numeric(wtdweights)))
     }else{
-        #dir <- ifelse(graph_lines[[direction]]=="Both",0,1)
-        result_graph <- build_graph_directed(graph_lines, digits = digits,
-                                    attrs = TRUE, line_weight='lx_weight',
-                                    direction = direction)
+      return(list(0L, NULL))
     }
-    ## step4 finding for each point its corresponding vertex
-    points$vertex <- closest_points(points,result_graph$spvertices)
-    if(verbose){
-        print("calculating the distances on the network")
-    }
-    starts <- subset(points,points$pttype=="start")
-    u <- unique(points$vertex)
-
-    ## step 4 calculating the distances between the start and end points
-    base_distances <- igraph::distances(result_graph$graph,
-                                        v = starts$vertex, to = u,
-                                        mode = "out")
-    all_ditancesdt <- data.table(base_distances)
-    all_ditancesdt$origin <- starts$fid
-
-    ## step 5 extracting the distances as a dataframe rather than a matrix
-
-    #first groupby on rows :
-    #multiple rows might correspond to the same object (if multiple points like)
-    step1 <- all_ditancesdt[, lapply(.SD, min, na.rm = TRUE), by = origin ]
-    originid <- step1$origin
-
-    #then transpose and merge
-    step2 <- transpose(step1[,2:ncol(step1)])
-    step2$vertex <- u
-    pts <- data.table(st_drop_geometry(points[c("fid","vertex")]))
-    step2.5 <- data.table::merge.data.table(step2,pts,by="vertex",all=TRUE)
-    colorder <- c(2:(ncol(step2.5)-1),1,ncol(step2.5))
-    step2.5 <- data.table::setcolorder(step2.5,colorder)
-
-    step3 <- step2.5[, lapply(.SD, min, na.rm=TRUE), by=fid ]
-    destid <- step3$fid
-    #transpose again
-    step4 <- transpose(step3)
-    dist_matrix <- as.matrix(step4[2:(nrow(step4)-1)])
-    dist_matrix <- ifelse(is.na(dist_matrix),Inf,dist_matrix)
-    rownames(dist_matrix) <- originid
-    colnames(dist_matrix) <- destid
-
-    ##step 6 finaly generate the neighbouring object with the data
-    nblist <- lapply(1:nrow(dist_matrix),function(i){
-        row <- dist_matrix[i,]
-        iid <- originid[i]
-        test <- row<=maxdistance & destid!=iid
-        if(any(test)){
-            nbs <- destid[test]
-            okdistances <- row[test]
-            okdistances <- ifelse(okdistances==0,mindist,okdistances)
-            weights <- dist_func(okdistances)
-            if(matrice_type=="B"){
-                wtdweights <- rep(1,length(nbs))
-            }else if (matrice_type=="W"){
-                wtdweights <- weights/sum(weights)
-            }else if (matrice_type == "I"){
-              wtdweights <- weights
-            }
-            return(list(nbs,as.numeric(wtdweights)))
-        }else{
-            return(list(0L, NULL))
-        }
-    })
-    nbs <- lapply(1:length(nblist), function(j) {
-        nblist[[j]][[1]]
-    })
-    names(nbs) <- originid
-    weights <- lapply(1:length(nblist), function(j) {
-        nblist[[j]][[2]]
-    })
-    names(weights) <- originid
-    return(list(nbs, weights))
+  })
+  nbs <- lapply(1:length(nblist), function(j) {
+    nblist[[j]][[1]]
+  })
+  names(nbs) <- originid
+  weights <- lapply(1:length(nblist), function(j) {
+    nblist[[j]][[2]]
+  })
+  names(weights) <- originid
+  return(list(nbs, weights))
 }
 
+
+
+
+# prepare_elements_netlistw <- function(is,grid,snapped_points,lines,maxdistance){
+#
+#     ## step1 preparing the spatial indices
+#     lines_tree <- spNetwork::build_quadtree(lines)
+#     snapped_points_tree <-  spNetwork::build_quadtree(snapped_points)
+#
+#     snapped_points$oids <- 1:nrow(snapped_points)
+#     ## step 2 extracting the quadra
+#     results <- lapply(is,function(i){
+#         quadra <- grid[i,]
+#         #selecting the starting points
+#         start_pts <-  spNetwork::spatial_request(quadra,snapped_points_tree, snapped_points)
+#         if(nrow(start_pts)==0){
+#             return(NULL)
+#         }else{
+#             #start_pts <- snapped_points[snapped_points$fid %in% start_pts$fid,]
+#             start_pts$pttype <- "start"
+#             #selecting the endpoints
+#             poly <- st_bbox_geom(start_pts)
+#             buff <- st_buffer(poly, dist = maxdistance)
+#             if(nrow(start_pts)==nrow(snapped_points)){
+#                 all_pts <- start_pts
+#             }else{
+#                 end_pts <-  spNetwork::spatial_request(buff, snapped_points_tree, snapped_points)
+#                 end_pts <- subset(end_pts,(end_pts$oids %in% start_pts$oids)== FALSE)
+#                 if(nrow(end_pts) > 0){
+#                   end_pts$pttype <- "end"
+#                   #combining all the points
+#                   all_pts <- rbind(start_pts,end_pts)
+#                 }else{
+#                   all_pts <- start_pts
+#                 }
+#
+#             }
+#             #selecting the lines
+#             selected_lines <-  spNetwork::spatial_request(buff, lines_tree, lines)
+#             #calculating the elements
+#             return(list(all_pts,selected_lines))
+#         }
+#     })
+#     return(results)
+# }
 
 
 #' @title Data preparation for network_listw
@@ -198,45 +350,56 @@ network_listw_worker<-function(points,lines,maxdistance,dist_func, direction=NUL
 #' #no example provided, this is an internal function
 prepare_elements_netlistw <- function(is,grid,snapped_points,lines,maxdistance){
 
-    ## step1 preparing the spatial indices
-    lines_tree <- spNetwork::build_quadtree(lines)
-    snapped_points_tree <-  spNetwork::build_quadtree(snapped_points)
+  ## step1 preparing the spatial indices
+  grid$grid_id <- as.character(is)
+  grid$oid <- NULL
 
-    snapped_points$oids <- 1:nrow(snapped_points)
-    ## step 2 extracting the quadra
-    results <- lapply(is,function(i){
-        quadra <- grid[i,]
-        #selecting the starting points
-        start_pts <-  spNetwork::spatial_request(quadra,snapped_points_tree, snapped_points)
-        if(nrow(start_pts)==0){
-            return(NULL)
+  # We precalculate the intersections
+  inter_pts <- st_join(snapped_points, grid)
+  inter_pts <- split(inter_pts, inter_pts$grid_id)
+
+  inter_end_pts <- st_join(snapped_points, st_buffer(grid, maxdistance))
+  inter_end_pts <- split(inter_end_pts, inter_end_pts$grid_id)
+
+  inter_lines <- st_join(lines, st_buffer(grid, maxdistance))
+  inter_lines <- split(inter_lines, inter_lines$grid_id)
+
+  snapped_points$oids <- 1:nrow(snapped_points)
+
+  ## step 2 extracting the quadra
+  results <- lapply(is,function(i){
+    quadra <- grid[i,]
+    gid <- quadra$grid_id
+    #selecting the starting points
+    start_pts <-  inter_pts[[gid]]
+
+    if(nrow(start_pts)==0){
+      return(NULL)
+    }else{
+      #start_pts <- snapped_points[snapped_points$fid %in% start_pts$fid,]
+      start_pts$pttype <- "start"
+      #selecting the endpoints
+      if(nrow(start_pts)==nrow(snapped_points)){
+        all_pts <- start_pts
+      }else{
+        end_pts <-  inter_end_pts[[gid]]
+        end_pts <- subset(end_pts,(end_pts$oids %in% start_pts$oids)== FALSE)
+        if(nrow(end_pts) > 0){
+          end_pts$pttype <- "end"
+          #combining all the points
+          all_pts <- rbind(start_pts,end_pts)
         }else{
-            #start_pts <- snapped_points[snapped_points$fid %in% start_pts$fid,]
-            start_pts$pttype <- "start"
-            #selecting the endpoints
-            poly <- st_bbox_geom(start_pts)
-            buff <- st_buffer(poly, dist = maxdistance)
-            if(nrow(start_pts)==nrow(snapped_points)){
-                all_pts <- start_pts
-            }else{
-                end_pts <-  spNetwork::spatial_request(buff, snapped_points_tree, snapped_points)
-                end_pts <- subset(end_pts,(end_pts$oids %in% start_pts$oids)== FALSE)
-                if(nrow(end_pts) > 0){
-                  end_pts$pttype <- "end"
-                  #combining all the points
-                  all_pts <- rbind(start_pts,end_pts)
-                }else{
-                  all_pts <- start_pts
-                }
-
-            }
-            #selecting the lines
-            selected_lines <-  spNetwork::spatial_request(buff, lines_tree, lines)
-            #calculating the elements
-            return(list(all_pts,selected_lines))
+          all_pts <- start_pts
         }
-    })
-    return(results)
+
+      }
+      #selecting the lines
+      selected_lines <-  inter_lines[[gid]]
+      #calculating the elements
+      return(list(all_pts,selected_lines))
+    }
+  })
+  return(results)
 }
 
 
@@ -293,9 +456,14 @@ prepare_elements_netlistw <- function(is,grid,snapped_points,lines,maxdistance){
 #' @examples
 #' \donttest{
 #' data(mtl_network)
-#' listw <- network_listw(mtl_network, mtl_network, maxdistance = 500,
-#'         method = "centroid", line_weight = "length",
-#'         dist_func = 'squared inverse', matrice_type='B', grid_shape = c(2,2))
+#' listw <- network_listw(mtl_network,
+#'     mtl_network,
+#'     maxdistance = 500,
+#'     method = "centroid",
+#'     line_weight = "length",
+#'     dist_func = 'squared inverse',
+#'     matrice_type='B',
+#'     grid_shape = c(2,2))
 #' }
 network_listw <- function(origins,lines, maxdistance, method="centroid", point_dist=NULL, snap_dist=Inf, line_weight = "length", mindist=10, direction=NULL, dist_func = "inverse", matrice_type = "B", grid_shape=c(1,1), verbose = FALSE, digits = 3, tol=0.1){
 
@@ -374,6 +542,7 @@ network_listw <- function(origins,lines, maxdistance, method="centroid", point_d
 
     ## step7 iterating over the grid
     listvalues <- lapply(1:nrow(mygrid),function(i){
+
         if(verbose){
             print(paste("working on quadra : ",i,"/",max(ids),sep=""))
         }
@@ -385,10 +554,17 @@ network_listw <- function(origins,lines, maxdistance, method="centroid", point_d
             all_pts <- elements[[1]]
             selected_lines <- elements[[2]]
             #calculating the elements
-            values <- network_listw_worker(all_pts, selected_lines,
-                                           maxdistance, direction=direction, mindist=mindist,
-                                           dist_func = vdist_func, matrice_type = matrice_type,
-                                           verbose = verbose, digits = digits, tol=tol)
+            values <- network_listw_worker(points = all_pts,
+                                           lines = selected_lines,
+                                           maxdistance = maxdistance,
+                                           direction=direction,
+                                           mindist=mindist,
+                                           dist_func = vdist_func,
+                                           matrice_type = matrice_type,
+                                           verbose = verbose,
+                                           digits = digits,
+                                           tol=tol)
+
             return(values)
         }
 
@@ -409,6 +585,7 @@ network_listw <- function(origins,lines, maxdistance, method="centroid", point_d
     nbweights <- do.call("c", lapply(okvalues, function(value) {
         return(value[[2]])
     }))
+
     names(nbweights) <- names(nblist)
     ordered_weights <- lapply(as.character(origins$fid), function(x) {
         return(nbweights[[x]])
