@@ -1,3 +1,13 @@
+# spNetwork 0.4.5.9000
+
+Correction of the issue [27](https://github.com/JeremyGelb/spNetwork/issues/27)
+Correction of the issue [29](https://github.com/JeremyGelb/spNetwork/issues/29)
+Correction of the issue [30](https://github.com/JeremyGelb/spNetwork/issues/30)
+
+# spNetwork 0.4.5
+
+Rework of the K functions on network and integration of cppRouting to reduce calculation time when creating listw objects
+
 # spNetwork 0.4.4
 
 This is an important release!
